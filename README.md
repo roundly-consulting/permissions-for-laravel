@@ -9,8 +9,8 @@
 Roles & permissions for Laravel — native, single-guard, cache-backed. Give any
 authenticatable model roles and direct permissions, resolve effective permissions
 (direct ∪ via-roles), and make Laravel's `can:` gate and middleware authorize against
-them. Zero third-party runtime dependencies — a native replacement for
-`acme/laravel-permission`, scoped to what an API service actually needs.
+them. Zero third-party runtime dependencies — a native roles & permissions
+system, scoped to what an API service actually needs.
 
 ## Requirements
 
