@@ -1,3 +1,9 @@
+<p align="center">
+  <a href="https://roundly-consulting.com/open-source">
+    <img src="art/hero.png" alt="Permissions For Laravel — Roundly open source" width="100%">
+  </a>
+</p>
+
 # Permissions for Laravel
 
 Roles & permissions for Laravel — native, single-guard, cache-backed. Give any
