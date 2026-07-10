@@ -12,6 +12,7 @@ use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
  * @method static \Illuminate\Database\Eloquent\Collection<int, \RoundlyConsulting\Permissions\Models\Permission> getPermissions()
  * @method static bool permissionExists(string|BackedEnum $name)
  * @method static void forgetCachedPermissions()
+ * @method static void flushMemo()
  *
  * @see PermissionRegistrar
  */
