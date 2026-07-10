@@ -83,8 +83,37 @@ trait HasRoles
      */
     public function syncRoles(iterable $roles): static
     {
-        $this->roles()->sync($this->resolveRoles([$roles])->modelKeys());
+        $ids = $this->resolveRoles([$roles])->modelKeys();
+
+        // Wrap detach+attach so a concurrent gate check never observes the empty
+        // mid-sync role set.
+        $this->getConnection()->transaction(function () use ($ids): void {
+            $this->roles()->sync($ids);
+        });
+
         $this->unsetRelation('roles');
+        $this->forgetCachedPermissions();
+
+        return $this;
+    }
+
+    /**
+     * Detach every role and direct-permission grant this model holds.
+     *
+     * Call this from the holder model's `deleting` event (morph pivots have no
+     * foreign key to the holder table, so nothing cleans them up automatically).
+     * Leaving pivot rows behind lets a record that later reuses the same primary
+     * key silently inherit the deleted holder's roles and permissions.
+     */
+    public function forgetAllAuthorization(): static
+    {
+        $this->getConnection()->transaction(function (): void {
+            $this->roles()->detach();
+            $this->permissions()->detach();
+        });
+
+        $this->unsetRelation('roles');
+        $this->unsetRelation('permissions');
         $this->forgetCachedPermissions();
 
         return $this;
@@ -194,7 +223,7 @@ trait HasRoles
             } elseif (is_string($item)) {
                 $names[] = $item;
             } else {
-                throw new PermissionException('Roles must be strings, backed enums, or Role models.');
+                throw PermissionException::invalidType('Role');
             }
         }
 
@@ -216,13 +245,16 @@ trait HasRoles
 
         foreach ($this->flattenGrantArguments($roles) as $role) {
             if ($role instanceof Role) {
+                if (! $role->exists || $role->getKey() === null) {
+                    throw PermissionException::unsavedModel('Role');
+                }
                 $models->push($role);
             } elseif ($role instanceof BackedEnum) {
                 $names[] = (string) $role->value;
             } elseif (is_string($role)) {
                 $names[] = $role;
             } else {
-                throw new PermissionException('Roles must be strings, backed enums, or Role models.');
+                throw PermissionException::invalidType('Role');
             }
         }
 

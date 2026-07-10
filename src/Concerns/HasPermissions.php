@@ -48,7 +48,12 @@ trait HasPermissions
      */
     public function revokePermissionTo(string|BackedEnum|Permission|iterable ...$permissions): static
     {
-        $this->permissions()->detach($this->resolvePermissions($permissions)->modelKeys());
+        $ids = $this->resolvePermissions($permissions)->modelKeys();
+
+        $this->getConnection()->transaction(function () use ($ids): void {
+            $this->permissions()->detach($ids);
+        });
+
         $this->unsetRelation('permissions');
         $this->forgetCachedPermissions();
 
@@ -83,11 +88,16 @@ trait HasPermissions
     {
         $ids = $this->resolvePermissions($permissions)->modelKeys();
 
-        if ($mode->detaches()) {
-            $this->permissions()->sync($ids);
-        } else {
-            $this->permissions()->syncWithoutDetaching($ids);
-        }
+        // Wrap detach+attach so a concurrent gate check never observes the empty
+        // mid-sync grant set, and interleaved authoritative syncs can't persist a
+        // union/loss neither caller asked for.
+        $this->getConnection()->transaction(function () use ($ids, $mode): void {
+            if ($mode->detaches()) {
+                $this->permissions()->sync($ids);
+            } else {
+                $this->permissions()->syncWithoutDetaching($ids);
+            }
+        });
 
         $this->unsetRelation('permissions');
         $this->forgetCachedPermissions();
@@ -123,13 +133,16 @@ trait HasPermissions
 
         foreach ($this->flattenGrantArguments($permissions) as $permission) {
             if ($permission instanceof Permission) {
+                if (! $permission->exists || $permission->getKey() === null) {
+                    throw PermissionException::unsavedModel('Permission');
+                }
                 $models->push($permission);
             } elseif ($permission instanceof BackedEnum) {
                 $names[] = (string) $permission->value;
             } elseif (is_string($permission)) {
                 $names[] = $permission;
             } else {
-                throw new PermissionException('Permissions must be strings, backed enums, or Permission models.');
+                throw PermissionException::invalidType('Permission');
             }
         }
 
