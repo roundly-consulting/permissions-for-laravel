@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
 
 return new class extends Migration
 {
@@ -13,7 +14,7 @@ return new class extends Migration
         Schema::create($this->table(), function (Blueprint $table): void {
             $table->foreignId('permission_id')->constrained($this->permissions())->cascadeOnDelete();
             $table->string('model_type');
-            $table->unsignedBigInteger('model_id');
+            PermissionRegistrar::modelKeyType()->defineModelId($table);
 
             $table->index(['model_id', 'model_type']);
             $table->primary(['permission_id', 'model_id', 'model_type']);

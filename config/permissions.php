@@ -42,6 +42,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Model key type
+    |--------------------------------------------------------------------------
+    |
+    | The primary-key type of the models that hold roles and permissions. This
+    | drives the `model_id` column on the junction tables. Use "uuid" or "ulid"
+    | when your holders use HasUuids / HasUlids. Set this before the first
+    | migrate — the schema freezes once released. Supported: bigint, uuid, ulid.
+    |
+    */
+
+    'model_key_type' => env('PERMISSIONS_MODEL_KEY_TYPE', 'bigint'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Gate check
     |--------------------------------------------------------------------------
     |
@@ -73,12 +87,17 @@ return [
     | check cheap. It auto-invalidates on every grant mutation and on role or
     | permission save/delete. `store` of "default" uses the app's default store.
     |
+    | The short default TTL is defense-in-depth: bulk writes that bypass model
+    | events (seeders using DB::table/insert/upsert/delete/truncate) leave the
+    | catalog stale only until it expires. Run `permissions:cache-reset` after
+    | such writes to invalidate immediately.
+    |
     */
 
     'cache' => [
         'store' => env('PERMISSIONS_CACHE_STORE', 'default'),
         'key' => 'permissions.cache',
-        'ttl' => 60 * 60 * 24, // seconds
+        'ttl' => (int) env('PERMISSIONS_CACHE_TTL', 300), // seconds
     ],
 
 ];

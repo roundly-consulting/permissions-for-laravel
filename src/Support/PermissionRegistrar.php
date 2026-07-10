@@ -8,6 +8,7 @@ use BackedEnum;
 use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Database\Eloquent\Collection;
+use RoundlyConsulting\Permissions\Enums\ModelKeyType;
 use RoundlyConsulting\Permissions\Models\Permission;
 use RoundlyConsulting\Permissions\Models\Role;
 
@@ -62,6 +63,18 @@ final class PermissionRegistrar
         $this->cacheStore()->forget(self::cacheKey());
     }
 
+    /**
+     * Drop only the in-process memo, leaving the shared cache store intact.
+     *
+     * Called at request/job boundaries (Octane, queue workers) so a long-lived
+     * worker never serves a memo that outlived its authority — the next lookup
+     * re-reads the shared store, which invalidation propagates through.
+     */
+    public function flushMemo(): void
+    {
+        $this->permissions = null;
+    }
+
     public static function nameOf(string|BackedEnum $value): string
     {
         return $value instanceof BackedEnum ? (string) $value->value : $value;
@@ -92,6 +105,14 @@ final class PermissionRegistrar
         return is_string($name) ? $name : $default;
     }
 
+    /**
+     * The key type of the models that hold roles/permissions (drives `model_id`).
+     */
+    public static function modelKeyType(): ModelKeyType
+    {
+        return ModelKeyType::fromConfig(config('permissions.model_key_type', 'bigint'));
+    }
+
     private function cacheStore(): CacheRepository
     {
         $store = config('permissions.cache.store');
@@ -109,8 +130,8 @@ final class PermissionRegistrar
 
     private static function cacheTtl(): int
     {
-        $ttl = config('permissions.cache.ttl', 86400);
+        $ttl = config('permissions.cache.ttl', 300);
 
-        return is_int($ttl) ? $ttl : 86400;
+        return is_int($ttl) ? $ttl : 300;
     }
 }
