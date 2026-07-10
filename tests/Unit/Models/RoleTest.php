@@ -44,6 +44,24 @@ it('resolves its table name from config', function (): void {
     expect((new Role)->getTable())->toBe('custom_roles');
 });
 
+it('reads the localized description with an app-locale fallback', function (): void {
+    $role = Role::factory()->create([
+        'description' => ['en' => 'Administrator', 'sk' => 'Administrátor'],
+    ]);
+
+    app()->setLocale('sk');
+
+    expect($role->description())->toBe('Administrátor')
+        ->and($role->description('en'))->toBe('Administrator')
+        ->and($role->description('de'))->toBeNull();
+});
+
+it('returns a null description when none is stored', function (): void {
+    $role = Role::factory()->create(['description' => null]);
+
+    expect($role->description())->toBeNull();
+});
+
 it('cascades pivot rows on delete but leaves permissions intact', function (): void {
     $role = Role::findOrCreate('administrator');
     $permission = Permission::findOrCreate('auth.users.view');

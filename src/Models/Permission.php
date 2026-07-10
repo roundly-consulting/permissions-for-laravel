@@ -18,6 +18,12 @@ use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
  * @property array<string, string>|null $description
  * @property CarbonInterface $created_at
  * @property CarbonInterface $updated_at
+ *
+ * Deliberate skill deviations (auditable on purpose):
+ * - Non-final: the model is swappable via `permissions.models.permission`, so a
+ *   host may extend it — a final class would forbid that config contract.
+ * - No SoftDeletes: the `unique('name')` index would clash with soft-deleted
+ *   rows, and the junction pivots `cascadeOnDelete`, so deletion is hard by design.
  */
 class Permission extends Model
 {
@@ -34,9 +40,20 @@ class Permission extends Model
     public static function findOrCreate(string|BackedEnum $name): static
     {
         /** @var static $permission */
-        $permission = static::query()->firstOrCreate(['name' => PermissionRegistrar::nameOf($name)]);
+        $permission = static::query()->createOrFirst(['name' => PermissionRegistrar::nameOf($name)]);
 
         return $permission;
+    }
+
+    /**
+     * The localized description for the given (or current) locale, or null.
+     */
+    public function description(?string $locale = null): ?string
+    {
+        $locale ??= app()->getLocale();
+        $description = $this->description;
+
+        return is_array($description) ? ($description[$locale] ?? null) : null;
     }
 
     /**

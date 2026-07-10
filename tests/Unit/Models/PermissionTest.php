@@ -39,6 +39,24 @@ it('resolves its table name from config', function (): void {
     expect((new Permission)->getTable())->toBe('permissions');
 });
 
+it('reads the localized description with an app-locale fallback', function (): void {
+    $permission = Permission::factory()->create([
+        'description' => ['en' => 'View users', 'sk' => 'Zobraziť používateľov'],
+    ]);
+
+    app()->setLocale('sk');
+
+    expect($permission->description())->toBe('Zobraziť používateľov')
+        ->and($permission->description('en'))->toBe('View users')
+        ->and($permission->description('de'))->toBeNull();
+});
+
+it('returns a null description when none is stored', function (): void {
+    $permission = Permission::factory()->create(['description' => null]);
+
+    expect($permission->description())->toBeNull();
+});
+
 it('exposes the inverse roles relation', function (): void {
     $role = Role::findOrCreate('administrator');
     $permission = Permission::findOrCreate('auth.users.view');
