@@ -2,18 +2,27 @@
 
 declare(strict_types=1);
 
-// Guard against any third-party runtime vendor sneaking into src/. acme is the
-// package we replace outright, so it must never appear; the other roots are common
-// non-whitelisted vendors the dependency policy bans from `require`.
-arch('src never references a disallowed runtime vendor')
+// Guard against any third-party runtime vendor sneaking into src/. Allow-listing
+// only the sanctioned roots (Laravel/Symfony, our own Enums helper, PHP built-ins)
+// bans every non-whitelisted vendor implicitly — the dependency policy forbids them
+// from `require`, and none is ever named here.
+arch('src only uses allowed vendor roots')
     ->expect('RoundlyConsulting\Permissions')
-    ->not->toUse([
-        'Acme',
-        'Doctrine',
-        'GuzzleHttp',
-        'Ramsey',
-        'Nette',
-        'Webmozart',
+    ->toOnlyUse([
+        'RoundlyConsulting\Permissions',
+        'RoundlyConsulting\Permissions\Database\Factories',
+        'RoundlyConsulting\Enums',
+        'Illuminate',
+        'Carbon',
+        'BackedEnum',
+        'RuntimeException',
+        // native helpers used unqualified
+        'app',
+        'config',
+        'config_path',
+        'database_path',
+        'event',
+        '__',
     ]);
 
 arch('every source file declares strict types')
