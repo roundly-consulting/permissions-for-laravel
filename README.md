@@ -18,11 +18,13 @@ system, scoped to what an API service actually needs.
 - Laravel `^12.0` or `^13.0`
 
 Models that hold roles/permissions default to auto-incrementing `bigint` keys. UUID and
-ULID holders are supported via the `model_key_type` config key — set it **before** the first
-migrate (see [Configuration](#configuration)).
+ULID holders are supported via the `key_type` config key — set it **before** you publish and
+run the migrations (see [Configuration](#configuration)).
 
 Installs [`roundly-consulting/enums-for-laravel`](https://github.com/roundly-consulting/enums-for-laravel)
-for enum conventions.
+for enum conventions and
+[`roundly-consulting/package-toolkit-for-laravel`](https://github.com/roundly-consulting/package-toolkit-for-laravel)
+for the shared package bootstrapper.
 
 ## Installation
 
@@ -30,21 +32,23 @@ for enum conventions.
 composer require roundly-consulting/permissions-for-laravel
 ```
 
-Publish and run the migrations:
+Publish the config file — the holder key type is baked into the schema, so set it first:
+
+```bash
+php artisan vendor:publish --tag="permissions-config"
+```
+
+Then publish and run the migrations:
 
 ```bash
 php artisan vendor:publish --tag="permissions-migrations"
 php artisan migrate
 ```
 
-Optionally publish the config file:
-
-```bash
-php artisan vendor:publish --tag="permissions-config"
-```
-
-The package auto-loads its migrations, so publishing them is only needed if you want to
-own the files. Set `permissions.load_migrations` to `false` when you do.
+**Migrations are publish-only.** The package does not load them, so `php artisan migrate`
+creates nothing until you have published them into your app's `database/migrations`. They
+land timestamped and in dependency order; publishing again overwrites in place rather than
+adding a second copy.
 
 ## Configuration
 
@@ -65,11 +69,9 @@ return [
         'model_permissions' => 'model_permissions',
     ],
 
-    'model_key_type' => env('PERMISSIONS_MODEL_KEY_TYPE', 'bigint'),
+    'key_type' => env('PERMISSIONS_KEY_TYPE', 'bigint'),
 
     'register_gate_check' => true,
-
-    'load_migrations' => true,
 
     'cache' => [
         'store' => env('PERMISSIONS_CACHE_STORE', 'default'),
@@ -83,16 +85,31 @@ return [
 |---|---|---|---|
 | `models.role` | `class-string` | `Role::class` | Role model; swap for a subclass to extend it. |
 | `models.permission` | `class-string` | `Permission::class` | Permission model; swap for a subclass. |
-| `table_names.*` | `string` | see above | Table names (column names are fixed). Set before the first migrate. |
-| `model_key_type` | `string` | `bigint` (`PERMISSIONS_MODEL_KEY_TYPE`) | Key type of the holder models — `bigint`, `uuid`, or `ulid`. Drives the `model_id` column on the junction tables. **Set before the first migrate** (the schema freezes at release). |
+| `table_names.*` | `string` | see above | Table names (column names are fixed). Set before you migrate. |
+| `key_type` | `string` | `bigint` (`PERMISSIONS_KEY_TYPE`) | Key type of the holder models — `bigint`, `uuid`, or `ulid`. Drives the `model_id` column on the junction tables. **Set before you migrate** (the schema freezes at release). An unrecognized value falls back to `bigint`. |
 | `register_gate_check` | `bool` | `true` | Register the `Gate::before` hook so `can:<permission>` resolves. |
-| `load_migrations` | `bool` | `true` | Auto-load the package migrations. |
 | `cache.store` | `string` | `default` (`PERMISSIONS_CACHE_STORE`) | Cache store for the permission catalog; `default` uses the app store. |
 | `cache.key` | `string` | `permissions.cache` | Cache key for the catalog. |
 | `cache.ttl` | `int` | `300` (`PERMISSIONS_CACHE_TTL`) | Catalog cache TTL in seconds (short by default as defense-in-depth against bulk writes — see [Cache](#cache)). |
 
 There is **no guard concept**: no `guard_name` column, config, or parameter. The package
 is single-guard by design.
+
+### Holder key type
+
+`key_type` describes the models that *hold* roles and permissions, never this package's own
+tables (`roles` and `permissions` always own an auto-incrementing key). It types the
+`model_id` column on the two junction tables:
+
+| `key_type` | `model_id` column | Use when your holders… |
+|---|---|---|
+| `bigint` (default) | `unsignedBigInteger` | use Laravel's default auto-incrementing keys |
+| `uuid` | `uuid` | use `HasUuids` |
+| `ulid` | `ulid` | use `HasUlids` |
+
+```dotenv
+PERMISSIONS_KEY_TYPE=uuid
+```
 
 ## Usage
 
@@ -112,8 +129,9 @@ class User extends Authenticatable
 
 ### Create roles and permissions
 
-`findOrCreate` is idempotent under the unique `name` index and returns the configured
-concrete model:
+`findOrCreate` is idempotent under the unique `name` index, and it creates and returns the
+model you configured at `permissions.models.*` — so a host subclass gets its own class back,
+its own model events, and its own observers:
 
 ```php
 use RoundlyConsulting\Permissions\Models\Permission;
