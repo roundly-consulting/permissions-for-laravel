@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use RoundlyConsulting\Permissions\Database\Factories\PermissionFactory;
+use RoundlyConsulting\Permissions\Support\PermissionModel;
 use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
 
 /**
@@ -34,15 +35,21 @@ class Permission extends Model
 
     public function getTable(): string
     {
-        return PermissionRegistrar::tableName('permissions', 'permissions');
+        return PermissionRegistrar::permissionsTable();
     }
 
-    public static function findOrCreate(string|BackedEnum $name): static
+    /**
+     * Idempotently register a permission, returning the model configured at
+     * `permissions.models.permission`.
+     *
+     * Resolved through the config seam rather than `static::`, so a host that
+     * swapped the model gets *its* class back — and the row is created as that
+     * class, which is what fires the model events the provider hangs the catalog
+     * cache invalidation on.
+     */
+    public static function findOrCreate(string|BackedEnum $name): self
     {
-        /** @var static $permission */
-        $permission = static::query()->createOrFirst(['name' => PermissionRegistrar::nameOf($name)]);
-
-        return $permission;
+        return PermissionModel::query()->createOrFirst(['name' => PermissionRegistrar::nameOf($name)]);
     }
 
     /**
@@ -63,7 +70,7 @@ class Permission extends Model
     {
         return $this->belongsToMany(
             PermissionRegistrar::roleModel(),
-            PermissionRegistrar::tableName('permission_role', 'permission_role'),
+            PermissionRegistrar::permissionRoleTable(),
             'permission_id',
             'role_id',
         );
