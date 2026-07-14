@@ -11,27 +11,17 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create($this->table(), function (Blueprint $table): void {
-            $table->foreignId('role_id')->constrained($this->roles())->cascadeOnDelete();
+        Schema::create(PermissionRegistrar::modelRolesTable(), function (Blueprint $table): void {
+            $table->foreignId('role_id')->constrained(PermissionRegistrar::rolesTable())->cascadeOnDelete();
             $table->string('model_type');
-            PermissionRegistrar::modelKeyType()->defineModelId($table);
+
+            // The holder's key column, typed from `permissions.key_type`. `index: false`
+            // because the composite `[model_id, model_type]` index below is the one the
+            // morph lookups use — a second single-column index would be dead weight.
+            $table->ownerKey('model_id', PermissionRegistrar::keyType(), index: false);
 
             $table->index(['model_id', 'model_type']);
             $table->primary(['role_id', 'model_id', 'model_type']);
         });
-    }
-
-    private function table(): string
-    {
-        $name = config('permissions.table_names.model_roles', 'model_roles');
-
-        return is_string($name) ? $name : 'model_roles';
-    }
-
-    private function roles(): string
-    {
-        $name = config('permissions.table_names.roles', 'roles');
-
-        return is_string($name) ? $name : 'roles';
     }
 };

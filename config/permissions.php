@@ -49,11 +49,11 @@ return [
     | drives the `model_id` column on the junction tables. Use "uuid" or "ulid"
     | when your holders use HasUuids / HasUlids. Set this before you publish and
     | run the migrations — the schema freezes once released. Supported: bigint,
-    | uuid, ulid.
+    | uuid, ulid. An unrecognized value falls back to bigint.
     |
     */
 
-    'model_key_type' => env('PERMISSIONS_MODEL_KEY_TYPE', 'bigint'),
+    'key_type' => env('PERMISSIONS_KEY_TYPE', 'bigint'),
 
     /*
     |--------------------------------------------------------------------------
