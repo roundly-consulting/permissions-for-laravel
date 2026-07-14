@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\DB;
 use RoundlyConsulting\Permissions\Models\Permission;
 use RoundlyConsulting\Permissions\Models\Role;
 use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
+use RoundlyConsulting\Permissions\Tests\Fixtures\CustomPermission;
+use RoundlyConsulting\Permissions\Tests\Fixtures\CustomRole;
 use RoundlyConsulting\Permissions\Tests\Fixtures\PermissionName;
 
 it('memoizes the catalog so a second lookup runs no query', function (): void {
@@ -77,9 +79,11 @@ it('resolves the role and permission models from config', function (): void {
     expect(PermissionRegistrar::roleModel())->toBe(Role::class)
         ->and(PermissionRegistrar::permissionModel())->toBe(Permission::class);
 
-    config()->set('permissions.models.permission', 'App\\Models\\CustomPermission');
+    config()->set('permissions.models.permission', CustomPermission::class);
+    config()->set('permissions.models.role', CustomRole::class);
 
-    expect(PermissionRegistrar::permissionModel())->toBe('App\\Models\\CustomPermission');
+    expect(PermissionRegistrar::permissionModel())->toBe(CustomPermission::class)
+        ->and(PermissionRegistrar::roleModel())->toBe(CustomRole::class);
 });
 
 it('falls back to defaults for non-string cache config', function (): void {

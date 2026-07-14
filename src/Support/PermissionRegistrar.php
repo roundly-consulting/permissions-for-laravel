@@ -8,13 +8,16 @@ use BackedEnum;
 use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Database\Eloquent\Collection;
-use RoundlyConsulting\Permissions\Enums\ModelKeyType;
+use RoundlyConsulting\PackageToolkit\Enums\KeyType;
 use RoundlyConsulting\Permissions\Models\Permission;
 use RoundlyConsulting\Permissions\Models\Role;
 
 /**
  * The single public service: model resolution from config, the permission
  * catalog cache, and name normalization (string|BackedEnum -> string).
+ *
+ * Every config read here is a **literal** key, so the config-contract test can
+ * scrape them out of the source and pin them against the shipped config file.
  */
 final class PermissionRegistrar
 {
@@ -83,34 +86,56 @@ final class PermissionRegistrar
     /** @return class-string<Role> */
     public static function roleModel(): string
     {
-        /** @var class-string<Role> $model */
-        $model = config('permissions.models.role', Role::class);
-
-        return $model;
+        return RoleModel::class();
     }
 
     /** @return class-string<Permission> */
     public static function permissionModel(): string
     {
-        /** @var class-string<Permission> $model */
-        $model = config('permissions.models.permission', Permission::class);
-
-        return $model;
+        return PermissionModel::class();
     }
 
-    public static function tableName(string $key, string $default): string
+    public static function rolesTable(): string
     {
-        $name = config("permissions.table_names.{$key}", $default);
+        return self::tableName('permissions.table_names.roles', 'roles');
+    }
 
-        return is_string($name) ? $name : $default;
+    public static function permissionsTable(): string
+    {
+        return self::tableName('permissions.table_names.permissions', 'permissions');
+    }
+
+    public static function permissionRoleTable(): string
+    {
+        return self::tableName('permissions.table_names.permission_role', 'permission_role');
+    }
+
+    public static function modelRolesTable(): string
+    {
+        return self::tableName('permissions.table_names.model_roles', 'model_roles');
+    }
+
+    public static function modelPermissionsTable(): string
+    {
+        return self::tableName('permissions.table_names.model_permissions', 'model_permissions');
     }
 
     /**
      * The key type of the models that hold roles/permissions (drives `model_id`).
+     *
+     * Misconfiguration never throws — an unrecognized value silently falls back to
+     * the safe `bigint` default, which is what the schema has always emitted.
      */
-    public static function modelKeyType(): ModelKeyType
+    public static function keyType(): KeyType
     {
-        return ModelKeyType::fromConfig(config('permissions.model_key_type', 'bigint'));
+        return KeyType::fromConfig('permissions.key_type');
+    }
+
+    private static function tableName(string $key, string $default): string
+    {
+        $name = config($key, $default);
+
+        return is_string($name) ? $name : $default;
     }
 
     private function cacheStore(): CacheRepository

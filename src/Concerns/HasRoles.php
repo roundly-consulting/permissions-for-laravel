@@ -34,7 +34,7 @@ trait HasRoles
         return $this->morphToMany(
             PermissionRegistrar::roleModel(),
             'model',
-            PermissionRegistrar::tableName('model_roles', 'model_roles'),
+            PermissionRegistrar::modelRolesTable(),
             'model_id',
             'role_id',
         );
@@ -48,7 +48,7 @@ trait HasRoles
         return $this->morphToMany(
             PermissionRegistrar::permissionModel(),
             'model',
-            PermissionRegistrar::tableName('model_permissions', 'model_permissions'),
+            PermissionRegistrar::modelPermissionsTable(),
             'model_id',
             'permission_id',
         );

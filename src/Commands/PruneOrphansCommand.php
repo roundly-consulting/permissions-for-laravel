@@ -34,8 +34,8 @@ final class PruneOrphansCommand extends Command
         $deleted = 0;
 
         foreach ([
-            PermissionRegistrar::tableName('model_roles', 'model_roles'),
-            PermissionRegistrar::tableName('model_permissions', 'model_permissions'),
+            PermissionRegistrar::modelRolesTable(),
+            PermissionRegistrar::modelPermissionsTable(),
         ] as $table) {
             $deleted += $this->pruneTable($connection, $table);
         }
