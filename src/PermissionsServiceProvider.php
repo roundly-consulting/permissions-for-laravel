@@ -8,41 +8,89 @@ use Illuminate\Contracts\Auth\Access\Authorizable;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\ServiceProvider;
+use RoundlyConsulting\PackageToolkit\Concerns\RegistersBlueprintMacros;
+use RoundlyConsulting\PackageToolkit\Package;
+use RoundlyConsulting\PackageToolkit\PackageServiceProvider;
 use RoundlyConsulting\Permissions\Commands\CacheResetCommand;
 use RoundlyConsulting\Permissions\Commands\PruneOrphansCommand;
 use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
 
-final class PermissionsServiceProvider extends ServiceProvider
+final class PermissionsServiceProvider extends PackageServiceProvider
 {
+    use RegistersBlueprintMacros;
+
+    public function configurePackage(Package $package): void
+    {
+        $package
+            ->name('permissions')
+            ->hasConfigFile()
+            ->hasMigrations()
+            ->hasCommands([CacheResetCommand::class, PruneOrphansCommand::class])
+            ->contributesToAbout(fn (): array => $this->aboutSection());
+    }
+
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__.'/../config/permissions.php', 'permissions');
+        parent::register();
+
+        // Registered here, not in boot(), so the `ownerKey()` schema macro the
+        // junction migrations call exists before the migrator can run.
+        $this->registerBlueprintMacros();
 
         $this->app->singleton(PermissionRegistrar::class);
     }
 
     public function boot(): void
     {
-        if (config('permissions.load_migrations', true)) {
-            $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
-        }
+        parent::boot();
 
         $this->registerModelEvents();
         $this->registerGateCheck();
         $this->registerMemoReset();
+    }
 
-        if ($this->app->runningInConsole()) {
-            $this->commands([CacheResetCommand::class, PruneOrphansCommand::class]);
+    /**
+     * The `about` payload.
+     *
+     * Secret-safe: a permission or role name is the host's own business
+     * vocabulary, but this package's config ships none of them (they live in the
+     * database), so there is nothing here to leak. What config *does* hold is
+     * host topology — the cache store, the cache key and the table names — and
+     * that renders as presence and counts only, never as a value.
+     *
+     * @return array<string, string>
+     */
+    private function aboutSection(): array
+    {
+        $renamed = count(array_filter(
+            [
+                'roles' => PermissionRegistrar::rolesTable(),
+                'permissions' => PermissionRegistrar::permissionsTable(),
+                'permission_role' => PermissionRegistrar::permissionRoleTable(),
+                'model_roles' => PermissionRegistrar::modelRolesTable(),
+                'model_permissions' => PermissionRegistrar::modelPermissionsTable(),
+            ],
+            static fn (string $table, string $default): bool => $table !== $default,
+            ARRAY_FILTER_USE_BOTH,
+        ));
 
-            $this->publishes([
-                __DIR__.'/../config/permissions.php' => config_path('permissions.php'),
-            ], 'permissions-config');
+        $store = config('permissions.cache.store');
+        $key = config('permissions.cache.key');
+        $ttl = config('permissions.cache.ttl', 300);
 
-            $this->publishes([
-                __DIR__.'/../database/migrations' => database_path('migrations'),
-            ], 'permissions-migrations');
-        }
+        return [
+            'Role model' => class_basename(PermissionRegistrar::roleModel()),
+            'Permission model' => class_basename(PermissionRegistrar::permissionModel()),
+            'Holder key type' => PermissionRegistrar::keyType()->value,
+            'Tables' => $renamed === 0 ? 'DEFAULT' : $renamed.' renamed',
+            'Gate check' => config('permissions.register_gate_check', true) === false ? 'OFF' : 'ON',
+            'Catalog cache' => sprintf(
+                'store %s, key %s, ttl %ds',
+                $store === 'default' || ! is_string($store) ? 'DEFAULT' : 'SET',
+                $key === 'permissions.cache' || ! is_string($key) ? 'DEFAULT' : 'SET',
+                is_int($ttl) ? $ttl : 300,
+            ),
+        ];
     }
 
     /**

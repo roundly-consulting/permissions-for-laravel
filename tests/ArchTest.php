@@ -12,15 +12,15 @@ arch('src only uses allowed vendor roots')
         'RoundlyConsulting\Permissions',
         'RoundlyConsulting\Permissions\Database\Factories',
         'RoundlyConsulting\Enums',
+        'RoundlyConsulting\PackageToolkit',
         'Illuminate',
         'Carbon',
         'BackedEnum',
         'RuntimeException',
         // native helpers used unqualified
         'app',
+        'class_basename',
         'config',
-        'config_path',
-        'database_path',
         'event',
         '__',
     ]);

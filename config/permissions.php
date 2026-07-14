@@ -47,8 +47,9 @@ return [
     |
     | The primary-key type of the models that hold roles and permissions. This
     | drives the `model_id` column on the junction tables. Use "uuid" or "ulid"
-    | when your holders use HasUuids / HasUlids. Set this before the first
-    | migrate — the schema freezes once released. Supported: bigint, uuid, ulid.
+    | when your holders use HasUuids / HasUlids. Set this before you publish and
+    | run the migrations — the schema freezes once released. Supported: bigint,
+    | uuid, ulid.
     |
     */
 
@@ -65,18 +66,6 @@ return [
     */
 
     'register_gate_check' => true,
-
-    /*
-    |--------------------------------------------------------------------------
-    | Load migrations
-    |--------------------------------------------------------------------------
-    |
-    | Load the package migrations automatically. Set to false if you publish
-    | the migrations and want to own the files in your application instead.
-    |
-    */
-
-    'load_migrations' => true,
 
     /*
     |--------------------------------------------------------------------------
