@@ -22,9 +22,12 @@ ULID holders are supported via the `key_type` config key — set it **before** y
 run the migrations (see [Configuration](#configuration)).
 
 Installs [`roundly-consulting/enums-for-laravel`](https://github.com/roundly-consulting/enums-for-laravel)
-for enum conventions and
+for enum conventions,
 [`roundly-consulting/package-toolkit-for-laravel`](https://github.com/roundly-consulting/package-toolkit-for-laravel)
-for the shared package bootstrapper.
+for the shared package bootstrapper, and
+[`roundly-consulting/translatable-for-laravel`](https://github.com/roundly-consulting/translatable-for-laravel)
+for the translatable role/permission `description` (see
+[Integrates with](#integrates-with)).
 
 ## Installation
 
@@ -73,6 +76,10 @@ return [
 
     'register_gate_check' => true,
 
+    'description_fallback' => RoundlyConsulting\Translatable\Enums\FallbackMode::tryFrom(
+        (string) env('PERMISSIONS_DESCRIPTION_FALLBACK', 'fallback')
+    ) ?? RoundlyConsulting\Translatable\Enums\FallbackMode::Fallback,
+
     'cache' => [
         'store' => env('PERMISSIONS_CACHE_STORE', 'default'),
         'key' => 'permissions.cache',
@@ -88,6 +95,7 @@ return [
 | `table_names.*` | `string` | see above | Table names (column names are fixed). Set before you migrate. |
 | `key_type` | `string` | `bigint` (`PERMISSIONS_KEY_TYPE`) | Key type of the holder models — `bigint`, `uuid`, or `ulid`. Drives the `model_id` column on the junction tables. **Set before you migrate** (the schema freezes at release). An unrecognized value falls back to `bigint`. |
 | `register_gate_check` | `bool` | `true` | Register the `Gate::before` hook so `can:<permission>` resolves. |
+| `description_fallback` | `FallbackMode` | `Fallback` (`PERMISSIONS_DESCRIPTION_FALLBACK`) | How the translatable `description` falls back when the current locale is missing — see [Integrates with](#integrates-with). |
 | `cache.store` | `string` | `default` (`PERMISSIONS_CACHE_STORE`) | Cache store for the permission catalog; `default` uses the app store. |
 | `cache.key` | `string` | `permissions.cache` | Cache key for the catalog. |
 | `cache.ttl` | `int` | `300` (`PERMISSIONS_CACHE_TTL`) | Catalog cache TTL in seconds (short by default as defense-in-depth against bulk writes — see [Cache](#cache)). |
@@ -141,15 +149,29 @@ $role = Role::findOrCreate('administrator');
 $permission = Permission::findOrCreate('auth.users.view');
 ```
 
-Both models carry an optional translatable `description` (a JSON locale map). Read it with the
-`description()` accessor, which falls back to the current app locale:
+Both models carry an optional translatable `description`, powered by
+[`translatable-for-laravel`](https://github.com/roundly-consulting/translatable-for-laravel).
+Write a per-locale array (or a bare string for the current locale); read it back as a plain
+string resolved for the current app locale:
 
 ```php
+use Illuminate\Support\Facades\App;
+
 $permission->update(['description' => ['en' => 'View users', 'sk' => 'Zobraziť používateľov']]);
 
-$permission->description();      // current app locale, or null
-$permission->description('sk');  // "Zobraziť používateľov"
+App::setLocale('sk');
+$permission->description;              // "Zobraziť používateľov"  (current locale)
+
+App::setLocale('en');
+$permission->description;              // "View users"
+
+$permission->getTranslations('description'); // ['en' => 'View users', 'sk' => 'Zobraziť …']
+$permission->getTranslation('description', 'sk'); // "Zobraziť používateľov"
 ```
+
+`toArray()`, `toJson()`, and API Resources emit the **resolved locale string**, matching
+property access — not the raw JSON map. See [Integrates with](#integrates-with) for the
+fallback behaviour and how to change it.
 
 ### Grant permissions to a role
 
@@ -293,6 +315,41 @@ deletes pivot rows whose `model_type` + `model_id` no longer resolve to a model:
 
 ```bash
 php artisan permissions:prune-orphans
+```
+
+## Integrates with
+
+### `translatable-for-laravel` — the role/permission `description`
+
+The `description` on both `Role` and `Permission` is a real translatable attribute, backed by
+[`translatable-for-laravel`](https://github.com/roundly-consulting/translatable-for-laravel).
+It is stored as a per-locale JSON map (`jsonb`) and resolves to a plain string for the current
+app locale. There is nothing to wire — the trait is applied for you.
+
+```php
+$role->update(['description' => ['en' => 'Administrator', 'sk' => 'Administrátor']]);
+
+App::setLocale('sk');
+$role->description;   // "Administrátor"
+```
+
+**Fallback behaviour is a deliberate, configurable choice** via `permissions.description_fallback`
+(env `PERMISSIONS_DESCRIPTION_FALLBACK`). When the current locale has no value:
+
+| Mode | Chain | Notes |
+|---|---|---|
+| `Fallback` **(default)** | current locale → app `fallback_locale` → `null` | The least-surprising, non-disclosing choice. A description you have not translated for a locale **never** surfaces content from an unrelated language. |
+| `None` | current locale → `null` | Exact locale only. |
+| `Any` | current locale → app `fallback_locale` → **first available locale** | Descriptions never render blank, but a value left untranslated for one locale can surface in **another** — a cross-locale disclosure. Opt in deliberately. |
+
+Descriptions are developer/admin-facing labels, not user PII, so `Any` is a reasonable opt-in
+— it is simply not the default, because silently reaching into an unrelated locale is a
+surprise. Override per model with a `protected ?FallbackMode $translatableFallbackMode` property
+on your own subclass.
+
+```dotenv
+# Opt into first-available fallback (descriptions never render blank):
+PERMISSIONS_DESCRIPTION_FALLBACK=any
 ```
 
 ## Testing
