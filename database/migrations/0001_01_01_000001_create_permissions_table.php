@@ -14,7 +14,9 @@ return new class extends Migration
         Schema::create(PermissionRegistrar::permissionsTable(), function (Blueprint $table): void {
             $table->id();
             $table->string('name')->unique();
-            $table->json('description')->nullable();
+            // jsonb to match the translatable convention (Postgres uses jsonb; SQLite
+            // and MySQL map it to text/json). `description` is a per-locale map.
+            $table->jsonb('description')->nullable();
             $table->timestamps();
         });
     }

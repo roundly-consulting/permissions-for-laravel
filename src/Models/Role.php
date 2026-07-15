@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use RoundlyConsulting\Permissions\Concerns\HasPermissions;
+use RoundlyConsulting\Permissions\Concerns\TranslatesDescription;
 use RoundlyConsulting\Permissions\Database\Factories\RoleFactory;
 use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
 use RoundlyConsulting\Permissions\Support\RoleModel;
@@ -17,7 +18,7 @@ use RoundlyConsulting\Permissions\Support\RoleModel;
 /**
  * @property int $id
  * @property string $name
- * @property array<string, string>|null $description
+ * @property string|null $description Resolved for the current locale; assign a per-locale array to write.
  * @property CarbonInterface $created_at
  * @property CarbonInterface $updated_at
  *
@@ -33,6 +34,7 @@ class Role extends Model
     use HasFactory;
 
     use HasPermissions;
+    use TranslatesDescription;
 
     protected $guarded = [];
 
@@ -56,17 +58,6 @@ class Role extends Model
     }
 
     /**
-     * The localized description for the given (or current) locale, or null.
-     */
-    public function description(?string $locale = null): ?string
-    {
-        $locale ??= app()->getLocale();
-        $description = $this->description;
-
-        return is_array($description) ? ($description[$locale] ?? null) : null;
-    }
-
-    /**
      * @return BelongsToMany<Permission, $this>
      */
     public function permissions(): BelongsToMany
@@ -77,14 +68,6 @@ class Role extends Model
             'role_id',
             'permission_id',
         );
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    protected function casts(): array
-    {
-        return ['description' => 'array'];
     }
 
     protected static function newFactory(): RoleFactory

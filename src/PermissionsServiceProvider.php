@@ -13,6 +13,7 @@ use RoundlyConsulting\PackageToolkit\Package;
 use RoundlyConsulting\PackageToolkit\PackageServiceProvider;
 use RoundlyConsulting\Permissions\Commands\CacheResetCommand;
 use RoundlyConsulting\Permissions\Commands\PruneOrphansCommand;
+use RoundlyConsulting\Permissions\Support\DescriptionFallback;
 use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
 
 final class PermissionsServiceProvider extends PackageServiceProvider
@@ -82,6 +83,7 @@ final class PermissionsServiceProvider extends PackageServiceProvider
             'Role model' => class_basename(PermissionRegistrar::roleModel()),
             'Permission model' => class_basename(PermissionRegistrar::permissionModel()),
             'Holder key type' => PermissionRegistrar::keyType()->value,
+            'Description fallback' => DescriptionFallback::fromConfig()->value,
             'Tables' => $renamed === 0 ? 'DEFAULT' : $renamed.' renamed',
             'Gate check' => config('permissions.register_gate_check', true) === false ? 'OFF' : 'ON',
             'Catalog cache' => sprintf(

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use RoundlyConsulting\Permissions\Models\Permission;
 use RoundlyConsulting\Permissions\Models\Role;
+use RoundlyConsulting\Translatable\Enums\FallbackMode;
 
 return [
 
@@ -66,6 +67,36 @@ return [
     */
 
     'register_gate_check' => true,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Description fallback
+    |--------------------------------------------------------------------------
+    |
+    | Role and permission `description` is a translatable attribute: it is stored
+    | as a per-locale map and resolves to a string for the current locale. This
+    | key decides how far the read falls back when the current locale has no value.
+    |
+    |   Fallback (default) — current locale, then the app's `fallback_locale`,
+    |                        then null. The least-surprising, non-disclosing choice:
+    |                        a description you have not translated for a locale never
+    |                        surfaces content from an *unrelated* language.
+    |   None               — current locale only; null when it is missing.
+    |   Any                — current locale, then `fallback_locale`, then the FIRST
+    |                        available locale. Descriptions never render blank, but a
+    |                        value you left untranslated for one locale can surface in
+    |                        another — a cross-locale disclosure. Opt in deliberately.
+    |
+    | Descriptions are developer/admin-facing labels, not user PII, so `Any` is a
+    | reasonable opt-in; it is not the default because silently reaching into an
+    | unrelated locale is a surprise. Override per model with a
+    | `protected ?FallbackMode $translatableFallbackMode` property.
+    |
+    */
+
+    'description_fallback' => FallbackMode::tryFrom(
+        (string) env('PERMISSIONS_DESCRIPTION_FALLBACK', 'fallback')
+    ) ?? FallbackMode::Fallback,
 
     /*
     |--------------------------------------------------------------------------
