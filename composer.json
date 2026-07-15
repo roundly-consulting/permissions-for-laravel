@@ -26,7 +26,8 @@
         "illuminate/database": "^12.0|^13.0",
         "illuminate/support": "^12.0|^13.0",
         "roundly-consulting/enums-for-laravel": "@dev",
-        "roundly-consulting/package-toolkit-for-laravel": "@dev"
+        "roundly-consulting/package-toolkit-for-laravel": "@dev",
+        "roundly-consulting/translatable-for-laravel": "@dev"
     },
     "require-dev": {
         "larastan/larastan": "^3.0",
@@ -60,6 +61,18 @@
         {
             "type": "vcs",
             "url": "https://github.com/roundly-consulting/package-toolkit-for-laravel",
+            "no-api": true
+        },
+        {
+            "type": "path",
+            "url": "../translatable-for-laravel*",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/roundly-consulting/translatable-for-laravel",
             "no-api": true
         }
     ],
