@@ -33,7 +33,8 @@ it('round-trips the description locale map', function (): void {
         'description' => ['en' => 'Administrator', 'sk' => 'Administrátor'],
     ]);
 
-    expect($role->fresh()->description)->toBe(['en' => 'Administrator', 'sk' => 'Administrátor']);
+    expect($role->fresh()->getTranslations('description'))
+        ->toBe(['en' => 'Administrator', 'sk' => 'Administrátor']);
 });
 
 it('resolves its table name from config', function (): void {
@@ -44,22 +45,24 @@ it('resolves its table name from config', function (): void {
     expect((new Role)->getTable())->toBe('custom_roles');
 });
 
-it('reads the localized description with an app-locale fallback', function (): void {
+it('resolves description to the current locale', function (): void {
     $role = Role::factory()->create([
         'description' => ['en' => 'Administrator', 'sk' => 'Administrátor'],
     ]);
 
     app()->setLocale('sk');
 
-    expect($role->description())->toBe('Administrátor')
-        ->and($role->description('en'))->toBe('Administrator')
-        ->and($role->description('de'))->toBeNull();
+    expect($role->fresh()->description)->toBe('Administrátor');
+
+    app()->setLocale('en');
+
+    expect($role->fresh()->description)->toBe('Administrator');
 });
 
 it('returns a null description when none is stored', function (): void {
     $role = Role::factory()->create(['description' => null]);
 
-    expect($role->description())->toBeNull();
+    expect($role->description)->toBeNull();
 });
 
 it('cascades pivot rows on delete but leaves permissions intact', function (): void {

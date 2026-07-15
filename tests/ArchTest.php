@@ -13,6 +13,7 @@ arch('src only uses allowed vendor roots')
         'RoundlyConsulting\Permissions\Database\Factories',
         'RoundlyConsulting\Enums',
         'RoundlyConsulting\PackageToolkit',
+        'RoundlyConsulting\Translatable',
         'Illuminate',
         'Carbon',
         'BackedEnum',

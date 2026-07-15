@@ -8,6 +8,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Orchestra\Testbench\TestCase as Orchestra;
 use RoundlyConsulting\Permissions\PermissionsServiceProvider;
+use RoundlyConsulting\Translatable\TranslatableServiceProvider;
 
 abstract class TestCase extends Orchestra
 {
@@ -16,7 +17,14 @@ abstract class TestCase extends Orchestra
      */
     protected function getPackageProviders($app): array
     {
-        return [PermissionsServiceProvider::class];
+        // permissions is a translatable consumer: the description attribute resolves
+        // through translatable's HasTranslations trait, so a real host has its
+        // provider booted (config + blueprint macros). Translatable ships no
+        // migrations, so there is nothing to load by directory here.
+        return [
+            TranslatableServiceProvider::class,
+            PermissionsServiceProvider::class,
+        ];
     }
 
     protected function defineEnvironment($app): void

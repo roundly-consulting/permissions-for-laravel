@@ -111,3 +111,14 @@ it('keeps the roles and permissions tables independent of the key type', functio
     expect(createStatement('roles'))->toContain('"id" integer primary key autoincrement not null')
         ->and(createStatement('permissions'))->toContain('"id" integer primary key autoincrement not null');
 })->with(['bigint', 'uuid', 'ulid']);
+
+it('carries a nullable jsonb description on roles and permissions', function (): void {
+    migrateForKeyType('bigint');
+
+    // `description` is a per-locale map stored as jsonb (translatable's convention);
+    // Laravel maps jsonb to `text` on SQLite. The column is always nullable.
+    expect(createStatement('roles'))->toContain('"description" text')
+        ->and(createStatement('roles'))->not->toContain('"description" text not null')
+        ->and(createStatement('permissions'))->toContain('"description" text')
+        ->and(createStatement('permissions'))->not->toContain('"description" text not null');
+});
