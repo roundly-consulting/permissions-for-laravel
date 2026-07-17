@@ -4,52 +4,54 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\Permissions\Tests;
 
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
-use Orchestra\Testbench\TestCase as Orchestra;
+use Illuminate\Support\ServiceProvider;
 use RoundlyConsulting\Permissions\PermissionsServiceProvider;
+use RoundlyConsulting\Testing\PackageTestCase;
 use RoundlyConsulting\Translatable\TranslatableServiceProvider;
 
-abstract class TestCase extends Orchestra
+abstract class TestCase extends PackageTestCase
 {
     /**
-     * @return array<int, class-string>
+     * Every provider permissions hard-requires, in registration order. A host
+     * auto-discovers these; the suite must list them or the test environment is a
+     * fiction.
+     *
+     * permissions is a translatable consumer: the `description` attribute resolves
+     * through translatable's HasTranslations trait, so a real host has its provider
+     * booted (config + blueprint macros). Translatable ships no migrations, so there is
+     * nothing to load by directory for it.
+     *
+     * @return list<class-string<ServiceProvider>>
      */
-    protected function getPackageProviders($app): array
+    protected function packageProviders(): array
     {
-        // permissions is a translatable consumer: the description attribute resolves
-        // through translatable's HasTranslations trait, so a real host has its
-        // provider booted (config + blueprint macros). Translatable ships no
-        // migrations, so there is nothing to load by directory here.
         return [
             TranslatableServiceProvider::class,
             PermissionsServiceProvider::class,
         ];
     }
 
-    protected function defineEnvironment($app): void
+    /**
+     * The five permission/role tables, named by provider class (never by filename),
+     * plus the host-owned `users` fixture the roles and permissions are granted to.
+     *
+     * @return list<class-string<ServiceProvider>|string>
+     */
+    protected function migrationSources(): array
     {
-        $app['config']->set('database.default', 'testing');
-        $app['config']->set('database.connections.testing', [
-            'driver' => 'sqlite',
-            'database' => ':memory:',
-            'prefix' => '',
-        ]);
-        $app['config']->set('cache.default', 'array');
+        return [
+            __DIR__.'/database/migrations',
+            PermissionsServiceProvider::class,
+        ];
     }
 
-    protected function defineDatabaseMigrations(): void
+    /**
+     * Applied BEFORE the providers boot.
+     *
+     * @return array<string, mixed>
+     */
+    protected function configBeforeBoot(): array
     {
-        $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
-
-        $this->beforeApplicationDestroyed(function (): void {
-            Schema::dropIfExists('users');
-        });
-
-        Schema::create('users', function (Blueprint $table): void {
-            $table->id();
-            $table->string('name')->nullable();
-            $table->timestamps();
-        });
+        return ['cache.default' => 'array'];
     }
 }

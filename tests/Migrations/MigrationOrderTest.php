@@ -2,177 +2,96 @@
 
 declare(strict_types=1);
 
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Schema;
-use RoundlyConsulting\PackageToolkit\Support\MigrationPublisher;
+use RoundlyConsulting\PackageToolkit\Enums\DatabaseDriver;
+use RoundlyConsulting\Permissions\PermissionsServiceProvider;
+use RoundlyConsulting\Testing\Database\DriverMatrix;
 
 /**
- * Migrations are published in directory order, so directory order MUST be
- * dependency order. A sqlite-only suite cannot prove that on its own — SQLite
- * silently accepts a CREATE TABLE that references a missing parent — so the
- * load-bearing assertion here is the **structural** one: parse every foreign key
- * out of the sources and assert the parent's CREATE sorts first.
+ * M + P + R for the five permission tables.
+ *
+ * Every table expression in this package's migrations is the `Class::method()` form —
+ * `Schema::create(PermissionRegistrar::rolesTable())`,
+ * `->constrained(PermissionRegistrar::permissionsTable())` — because table names are
+ * configurable. The resolver **never guesses on a non-literal**: an unmapped expression
+ * FAILS the assertion rather than silently dropping the edge, which is what keeps
+ * `foreignKeys: 4` honest instead of a number that passes over an empty parse.
  */
+$migrations = __DIR__.'/../../database/migrations';
 
-/** @return list<string> */
-function orderedSources(): array
-{
-    $files = glob(__DIR__.'/../../database/migrations/*.php') ?: [];
-    sort($files);
-
-    return array_values($files);
-}
+$tableResolvers = [
+    'PermissionRegistrar::rolesTable()' => 'roles',
+    'PermissionRegistrar::permissionsTable()' => 'permissions',
+    'PermissionRegistrar::permissionRoleTable()' => 'permission_role',
+    'PermissionRegistrar::modelRolesTable()' => 'model_roles',
+    'PermissionRegistrar::modelPermissionsTable()' => 'model_permissions',
+];
 
 /**
- * The table each migration CREATEs, keyed by its position in directory order.
+ * M — the structural, engine-independent order pin.
  *
- * The package's `Schema::create()` calls take a *variable* (the table name is
- * config-driven), so the table is derived from the filename rather than a literal.
+ * Publish order IS run order (directory sort), so a migration that constrains onto a table
+ * an earlier one has not created yet is uninstallable in a host. Five packages shipped
+ * exactly that under green SQLite suites, because SQLite happily creates a table whose
+ * foreign key names a missing parent and only complains at insert time.
  *
- * @return array<string, int>
+ * `foreignKeys: 4` pins the edge count: permission_role has 2 (permissions + roles),
+ * model_roles has 1, model_permissions has 1. The junction tables' `model_id` is
+ * deliberately NOT constrained — a holder can live in any table, and its key type is
+ * configurable (`permissions.key_type`).
  */
-function createdTablePositions(): array
-{
-    $positions = [];
-
-    foreach (orderedSources() as $index => $file) {
-        $name = MigrationPublisher::nameFor($file);
-
-        if (preg_match('/^create_(.+)_table$/', $name, $matches) === 1) {
-            $positions[$matches[1]] = $index;
-        }
-    }
-
-    return $positions;
-}
-
-it('creates every foreign key target before the table that references it', function (): void {
-    $positions = createdTablePositions();
-    $edges = 0;
-
-    foreach (orderedSources() as $index => $file) {
-        $source = (string) file_get_contents($file);
-        $child = MigrationPublisher::nameFor($file);
-
-        // Both of Laravel's FK forms, and this package's config-driven variants:
-        //   ->constrained('parent') / ->constrained(Registrar::parentTable())
-        //   ->references('id')->on('parent')
-        // The argument may itself be a call, so one level of nesting is allowed.
-        $argument = '((?:[^()]|\([^()]*\))*)';
-        preg_match_all('/->constrained\(\s*'.$argument.'\s*\)/', $source, $constrained);
-        preg_match_all('/->on\(\s*'.$argument.'\s*\)/', $source, $referenced);
-
-        foreach ([...$constrained[1], ...$referenced[1]] as $target) {
-            $parent = parentTableFrom($target);
-
-            $this->assertNotNull(
-                $parent,
-                "Could not resolve the FK target `{$target}` in {$child} — teach this pin the new form.",
-            );
-
-            $edges++;
-
-            $this->assertArrayHasKey(
-                $parent,
-                $positions,
-                "{$child} constrains onto `{$parent}`, which no migration creates.",
-            );
-
-            $this->assertLessThan(
-                $index,
-                $positions[$parent],
-                "{$child} (position {$index}) constrains onto `{$parent}`, created at position {$positions[$parent]}.",
-            );
-        }
-    }
-
-    // Guard the guard: the package really does emit four foreign keys, so a pin
-    // that found none would be passing vacuously.
-    expect($edges)->toBe(4);
+it('has a runnable migration order', function () use ($migrations, $tableResolvers): void {
+    expect($migrations)->toHaveRunnableMigrationOrder(
+        foreignKeys: 4,
+        tableResolvers: $tableResolvers,
+    );
 });
 
 /**
- * Resolve an FK target expression to a table name. The package names its parents
- * through the registrar (config-driven), so both the literal and the accessor
- * form must be understood.
+ * P — the publish-only guards. The fleet publishes migrations timestamped rather than
+ * auto-loading them; doing both runs both copies — a duplicate-table failure (bug #5, on
+ * three packages). `count: 5` pins the file count so neither check can pass over an empty
+ * or relocated directory.
  */
-function parentTableFrom(string $expression): ?string
-{
-    $expression = trim($expression);
-
-    if (preg_match('/^[\'"](.+)[\'"]$/', $expression, $literal) === 1) {
-        return $literal[1];
-    }
-
-    return match ($expression) {
-        'PermissionRegistrar::rolesTable()' => 'roles',
-        'PermissionRegistrar::permissionsTable()' => 'permissions',
-        'PermissionRegistrar::permissionRoleTable()' => 'permission_role',
-        default => null,
-    };
-}
-
-it('migrates the published filenames into a fresh empty database', function (): void {
-    $directory = sys_get_temp_dir().'/perm_published_'.uniqid();
-    File::makeDirectory($directory, recursive: true);
-
-    $timestamp = now();
-
-    foreach (orderedSources() as $offset => $file) {
-        $destination = MigrationPublisher::destination(
-            MigrationPublisher::nameFor($file),
-            $directory,
-            $timestamp->copy()->addSeconds($offset),
-        );
-
-        File::copy($file, $destination);
-    }
-
-    $database = tempnam(sys_get_temp_dir(), 'permorder').'.sqlite';
-    touch($database);
-
-    config()->set('database.connections.order_pin', ['driver' => 'sqlite', 'database' => $database, 'prefix' => '']);
-    config()->set('database.default', 'order_pin');
-    DB::purge('order_pin');
-
-    expect(Schema::hasTable('roles'))->toBeFalse();
-
-    $this->artisan('migrate', ['--path' => $directory, '--realpath' => true])->assertSuccessful();
-
-    foreach (['permissions', 'roles', 'permission_role', 'model_roles', 'model_permissions'] as $table) {
-        expect(Schema::hasTable($table))->toBeTrue();
-    }
-
-    // The FK targets are load-bearing, not incidental — if these constraints
-    // vanished, the order test above would be pinning nothing.
-    expect(collect(Schema::getForeignKeys('permission_role'))->pluck('foreign_table')->sort()->values()->all())
-        ->toBe(['permissions', 'roles']);
-
-    DB::purge('order_pin');
-    File::deleteDirectory($directory);
+it('never auto-loads its migrations — the host publishes them', function (): void {
+    expect(PermissionsServiceProvider::class)->toNotAutoLoadMigrations();
 });
 
-it('publishes the migrations in dependency order', function (): void {
-    $timestamp = now();
-    $destinations = [];
+it('publishes its migrations timestamp-injected into the host', function (): void {
+    expect(PermissionsServiceProvider::class)->toPublishMigrationsTimestamped('permissions-migrations', 5);
+});
 
-    foreach (orderedSources() as $offset => $file) {
-        $destinations[] = basename(MigrationPublisher::destination(
-            MigrationPublisher::nameFor($file),
-            '/database/migrations',
-            $timestamp->copy()->addSeconds($offset),
-        ));
-    }
+/**
+ * R — the real-engine proof, both halves.
+ *
+ * The structural pin above is engine-independent; this is the definitive one. `migrations: 5`
+ * pins the count, and the expectation additionally fails a set that "applies cleanly" while
+ * creating no tables — an empty `up()` otherwise passes and proves nothing.
+ */
+it('applies its migrations on postgres', function () use ($migrations): void {
+    expect($migrations)->toApplyOnConnection('pgsql', migrations: 5);
+})->skip(fn (): bool => ! test()->connectionAvailable('pgsql'), 'no postgres connection available');
 
-    $sorted = $destinations;
-    sort($sorted);
+/**
+ * The negative control — and the reason it is adoptable HERE where it was not for
+ * refresh-tokens or credits: this package has real FK edges, so a reversed order gives
+ * Postgres something to refuse. A green FK test proves nothing until you have watched the
+ * engine actually reject the broken order (forms #28). This fails loudly if the engine
+ * ACCEPTS the reordered set, which is what makes the positive half above meaningful.
+ */
+it('rejects a child-before-parent order on postgres', function () use ($migrations): void {
+    expect($migrations)->toRejectBrokenOrderOnConnection(
+        fn (array $files): array => array_reverse($files),
+        'pgsql',
+    );
+})->skip(fn (): bool => ! test()->connectionAvailable('pgsql'), 'no postgres connection available');
 
-    // The host's migrator runs published files in filename order — which must be
-    // the order they were published in.
-    expect($destinations)->toBe($sorted)
-        ->and($destinations)->toHaveCount(5)
-        ->and($destinations[0])->toContain('create_permissions_table')
-        ->and($destinations[1])->toContain('create_roles_table')
-        ->and($destinations[2])->toContain('create_permission_role_table');
+/**
+ * The driver-truth pin: compares the env-declared driver against what the connection
+ * itself answers, so a leg that exports the location vars but not `TESTING_DB_DRIVER` (or
+ * a TestCase that decapitates the base case by overriding `defineEnvironment()` without
+ * `parent::`) reds instead of quietly running sqlite and reporting green as a "postgres"
+ * job. Strictly stronger than reading a skip count by hand.
+ */
+it('runs on the driver the leg declared', function (): void {
+    expect(DatabaseDriver::current())->toBe(DatabaseDriver::from(DriverMatrix::driver()));
 });

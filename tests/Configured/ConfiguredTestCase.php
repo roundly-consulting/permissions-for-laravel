@@ -28,7 +28,7 @@ abstract class ConfiguredTestCase extends TestCase
     {
         parent::setUp();
 
-        CustomRole::$created = 0;
-        CustomPermission::$created = 0;
+        CustomRole::$creationCount = 0;
+        CustomPermission::$creationCount = 0;
     }
 }

@@ -79,23 +79,45 @@ it('reports the package in about', function (): void {
         ->and($output)->toContain('Gate check');
 });
 
+/**
+ * A — the secret-safe `about` capture.
+ *
+ * Purchases #13 is the bug this expectation exists for: the fleet's most credential-heavy
+ * `about` section was guarded by negative assertions against `app(Kernel::class)->output()`,
+ * which returns `''` — every "does not leak" check was vacuous. This package's own test was
+ * already on the right reader and already guarded the guard, so adopting the expectation is
+ * not a bug fix here; it is the same proof with the ordering enforced by the assertion
+ * rather than by this file remembering to do it: (1) output non-empty, (2) every
+ * `mustRender` string present, (3) only then no secret renders.
+ *
+ * What this package's config holds is not credentials but HOST TOPOLOGY — the cache store,
+ * the cache key, the table names — which must render as presence and counts, never values.
+ */
 it('never renders host topology or a swapped model namespace in about', function (): void {
     config()->set('permissions.models.role', CustomRole::class);
     config()->set('permissions.cache.store', 'tenant-redis-eu-west');
     config()->set('permissions.cache.key', 'acme.internal.permissions');
     config()->set('permissions.table_names.roles', 'acme_authz_roles');
 
-    Artisan::call('about', ['--only' => 'permissions']);
-    $output = Artisan::output();
-
-    // Guard the guard: an empty capture would make every negative below vacuous.
-    expect($output)->toContain('CustomRole');
-
-    expect($output)->not->toContain('tenant-redis-eu-west')
-        ->and($output)->not->toContain('acme.internal.permissions')
-        ->and($output)->not->toContain('acme_authz_roles')
-        // The model renders by base name, never its namespace.
-        ->and($output)->not->toContain('RoundlyConsulting\Permissions\Tests\Fixtures');
-
-    expect($output)->toContain('1 renamed');
+    expect('permissions')->toLeakNoSecrets(
+        secrets: [
+            // The host's infrastructure: which store and key back the catalog cache names
+            // its deployment, not this package's behaviour.
+            'tenant-redis-eu-west',
+            'acme.internal.permissions',
+            // A renamed table describes the host's schema; the section reports HOW MANY
+            // were renamed, never to what.
+            'acme_authz_roles',
+            // The model renders by base name, never its namespace — a namespace names the
+            // host's own application structure.
+            'RoundlyConsulting\\Permissions\\Tests\\Fixtures',
+        ],
+        mustRender: [
+            // The positive half: each is the safe report standing in for one of the
+            // secrets above, so it also proves the line rendered rather than being
+            // silently absent.
+            'CustomRole',
+            '1 renamed',
+        ],
+    );
 });

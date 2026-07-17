@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Permissions\Tests\Fixtures;
 
 use RoundlyConsulting\Permissions\Models\Role;
+use RoundlyConsulting\Testing\Fixtures\Concerns\CountsCreations;
 
 /**
  * A host subclass of the packaged role, as `permissions.models.role` invites.
@@ -15,12 +16,9 @@ use RoundlyConsulting\Permissions\Models\Role;
  */
 final class CustomRole extends Role
 {
-    public static int $created = 0;
-
-    protected static function booted(): void
-    {
-        self::created(static function (): void {
-            self::$created++;
-        });
-    }
+    // The shared trait replaces this fixture's hand-rolled `$created` counter. It is
+    // REQUIRED by `toHonourModelSwap`, not detected: omitting it used to drop the
+    // created-event half in silence, so a caller who had never thought about the trait got
+    // a weaker proof under the same name.
+    use CountsCreations;
 }

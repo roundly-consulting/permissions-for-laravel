@@ -21,8 +21,8 @@ it('creates roles and permissions as the configured model', function (): void {
 
     // Eloquent keys model events by the concrete class, so this is the proof the
     // row was really created as the host's model and not merely cast to it.
-    expect(CustomRole::$created)->toBe(1)
-        ->and(CustomPermission::$created)->toBe(1);
+    expect(CustomRole::$creationCount)->toBe(1)
+        ->and(CustomPermission::$creationCount)->toBe(1);
 });
 
 it('invalidates the catalog cache when a permission is registered', function (): void {
