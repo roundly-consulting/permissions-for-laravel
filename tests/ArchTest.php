@@ -59,6 +59,16 @@ ArchPresets::modelsResolveThroughSeam(__DIR__.'/../src', 'Support', [
 ]);
 
 /**
+ * The morph-key seam, guarded. Permissions emits no raw morph — its `model_roles`/
+ * `model_permissions` pivots build the owner column by hand from a `model_type` string plus
+ * `ownerKey('model_id', PermissionRegistrar::keyType())`, never `$table->morphs()` — so the pin
+ * scans real migration files and finds no violation, which is the correct green. It is
+ * non-vacuous by construction: the directory exists and holds scannable migrations, so a future
+ * raw morph added here would red. Adopted as a standing guard, not because a morph exists today.
+ */
+ArchPresets::morphColumnsUseTheSeam(__DIR__.'/../database/migrations');
+
+/**
  * The Dependency Policy as a test — this package had no such rule. No `alsoAllow`: its
  * `require` ships only php/illuminate/roundly, and the workflow installs test tooling with
  * `--dev`. If this goes red the shipped graph is wrong; never widen the allow-list to
