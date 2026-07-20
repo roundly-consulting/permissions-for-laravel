@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Permissions\Support;
 
 use BackedEnum;
+use Closure;
 use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Database\Eloquent\Collection;
@@ -41,14 +42,112 @@ final class PermissionRegistrar
             return $this->permissions;
         }
 
+        return $this->permissions = $this->hydrate($this->cachedRows());
+    }
+
+    /**
+     * The cached catalog as plain rows.
+     *
+     * Only scalars are ever written to the cache — never Eloquent models. A host
+     * may configure the cache to unserialize no classes at all
+     * (`cache.serializable_classes`, which Laravel ships as `false`), and cached
+     * objects then come back as `__PHP_Incomplete_Class`, breaking every read.
+     * Scalars are immune to that, smaller on the wire, and all this catalog
+     * needs — relations still resolve live.
+     *
+     * @return list<array{id: int|string, name: string}>
+     */
+    private function cachedRows(): array
+    {
+        $store = $this->cacheStore();
+        $loader = self::rowLoader();
+
+        // Deliberately `mixed`: whatever a previous release (or another app
+        // sharing this store) wrote under the key comes back here, so the shape
+        // is only known after the check below.
+        /** @var mixed $rows */
+        $rows = $store->remember(self::cacheKey(), self::cacheTtl(), $loader);
+
+        if (self::isRowList($rows)) {
+            return $rows;
+        }
+
+        // A payload in a shape this version does not understand (written by an
+        // older release, or unreadable under the host's unserialize policy).
+        // Rebuild it rather than failing the request.
+        $rows = $loader();
+        $store->put(self::cacheKey(), $rows, self::cacheTtl());
+
+        return $rows;
+    }
+
+    /**
+     * @return Closure(): list<array{id: int|string, name: string}>
+     */
+    private static function rowLoader(): Closure
+    {
         $model = self::permissionModel();
 
-        $loader = static fn (): Collection => $model::query()->get(['id', 'name']);
+        return static function () use ($model): array {
+            $rows = [];
 
-        /** @var Collection<int, Permission> $permissions */
-        $permissions = $this->cacheStore()->remember(self::cacheKey(), self::cacheTtl(), $loader);
+            foreach ($model::query()->get(['id', 'name']) as $permission) {
+                $key = $permission->getKey();
 
-        return $this->permissions = $permissions;
+                $rows[] = [
+                    'id' => is_int($key) ? $key : (string) $key,
+                    'name' => (string) $permission->name,
+                ];
+            }
+
+            return $rows;
+        };
+    }
+
+    /**
+     * Rebuilds catalog models from cached scalars, marked as existing records so
+     * they behave like the query-loaded models callers used to receive.
+     *
+     * @param  list<array{id: int|string, name: string}>  $rows
+     * @return Collection<int, Permission>
+     */
+    private function hydrate(array $rows): Collection
+    {
+        $model = self::permissionModel();
+        $instance = new $model;
+
+        /** @var Collection<int, Permission> $collection */
+        $collection = $instance->newCollection(array_map(
+            static fn (array $row): Permission => $instance->newFromBuilder([
+                $instance->getKeyName() => $row['id'],
+                'name' => $row['name'],
+            ]),
+            $rows,
+        ));
+
+        return $collection;
+    }
+
+    /**
+     * @phpstan-assert-if-true list<array{id: int|string, name: string}> $rows
+     */
+    private static function isRowList(mixed $rows): bool
+    {
+        if (! is_array($rows) || ! array_is_list($rows)) {
+            return false;
+        }
+
+        foreach ($rows as $row) {
+            if (! is_array($row) || ! is_string($row['name'] ?? null)) {
+                return false;
+            }
+
+            if (! is_int($row['id'] ?? null) && ! is_string($row['id'] ?? null)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function permissionExists(string|BackedEnum $name): bool
