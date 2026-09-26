@@ -17,7 +17,9 @@ use RoundlyConsulting\Translatable\Enums\FallbackMode;
  * The fallback mode is driven by `permissions.description_fallback` rather than
  * translatable's own global default, and is set per instance (config is only bound
  * at runtime). `initialize{Trait}` is Eloquent's per-model hook, so every instance —
- * including a host subclass — picks up the configured mode.
+ * including a host subclass — picks up the configured mode, UNLESS the model declares
+ * its own `protected ?FallbackMode $translatableFallbackMode = FallbackMode::…;`: an
+ * explicit per-model mode is the documented override and always wins over the config.
  *
  * @phpstan-require-extends Model
  */
@@ -32,6 +34,6 @@ trait TranslatesDescription
 
     public function initializeTranslatesDescription(): void
     {
-        $this->translatableFallbackMode = DescriptionFallback::fromConfig();
+        $this->translatableFallbackMode ??= DescriptionFallback::fromConfig();
     }
 }

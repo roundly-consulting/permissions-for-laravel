@@ -347,7 +347,17 @@ $role->description;   // "Administrátor"
 Descriptions are developer/admin-facing labels, not user PII, so `Any` is a reasonable opt-in
 — it is simply not the default, because silently reaching into an unrelated locale is a
 surprise. Override per model with a `protected ?FallbackMode $translatableFallbackMode` property
-on your own subclass.
+on your own subclass — an explicit per-model mode always wins over `description_fallback`:
+
+```php
+use RoundlyConsulting\Permissions\Models\Role;
+use RoundlyConsulting\Translatable\Enums\FallbackMode;
+
+final class AppRole extends Role
+{
+    protected ?FallbackMode $translatableFallbackMode = FallbackMode::None;
+}
+```
 
 ```dotenv
 # Opt into first-available fallback (descriptions never render blank):

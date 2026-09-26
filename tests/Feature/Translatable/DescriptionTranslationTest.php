@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\App;
 use RoundlyConsulting\Permissions\Models\Permission;
 use RoundlyConsulting\Permissions\Models\Role;
 use RoundlyConsulting\Permissions\Tests\Fixtures\CustomPermission;
+use RoundlyConsulting\Permissions\Tests\Fixtures\ExactDescriptionRole;
 use RoundlyConsulting\Translatable\Enums\FallbackMode;
 
 beforeEach(function (): void {
@@ -129,4 +130,20 @@ it('translates on a host subclass — the model seam and the trait compose', fun
     App::setLocale('en');
     expect($permission->fresh()->description)->toBe('Edit posts')
         ->and($permission->fresh())->toBeInstanceOf(CustomPermission::class);
+});
+
+it('keeps a per-model fallback mode instead of overwriting it with the config default', function (): void {
+    // The documented override: a subclass declaring its own $translatableFallbackMode.
+    config()->set('permissions.description_fallback', FallbackMode::Fallback);
+
+    $role = ExactDescriptionRole::query()->create([
+        'name' => 'editor',
+        'description' => ['en' => 'Editor'],
+    ]);
+
+    App::setLocale('sk'); // sk missing; the config's Fallback mode would surface `en`
+
+    expect($role->translationFallbackMode())->toBe(FallbackMode::None)
+        ->and($role->fresh()?->description)->toBeNull()
+        ->and((new Role)->translationFallbackMode())->toBe(FallbackMode::Fallback);
 });
