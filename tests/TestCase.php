@@ -6,6 +6,7 @@ namespace RoundlyConsulting\Permissions\Tests;
 
 use Illuminate\Support\ServiceProvider;
 use RoundlyConsulting\Permissions\PermissionsServiceProvider;
+use RoundlyConsulting\Sluggable\SluggableServiceProvider;
 use RoundlyConsulting\Testing\PackageTestCase;
 use RoundlyConsulting\Translatable\TranslatableServiceProvider;
 
@@ -19,13 +20,15 @@ abstract class TestCase extends PackageTestCase
      * permissions is a translatable consumer: the `description` attribute resolves
      * through translatable's HasTranslations trait, so a real host has its provider
      * booted (config + blueprint macros). Translatable ships no migrations, so there is
-     * nothing to load by directory for it.
+     * nothing to load by directory for it. Translatable in turn hard-requires sluggable,
+     * which a host auto-discovers too, so its provider is listed ahead of translatable's.
      *
      * @return list<class-string<ServiceProvider>>
      */
     protected function packageProviders(): array
     {
         return [
+            SluggableServiceProvider::class,
             TranslatableServiceProvider::class,
             PermissionsServiceProvider::class,
         ];
