@@ -39,6 +39,6 @@ final readonly class GrantRoles
         }
 
         $holder->unsetRelation('roles');
-        $this->registrar->forget();
+        $this->registrar->forgetAfterCommit($holder->getConnection());
     }
 }

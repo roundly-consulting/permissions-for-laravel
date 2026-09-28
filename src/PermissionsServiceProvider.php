@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Permissions;
 
 use Illuminate\Contracts\Auth\Access\Authorizable;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Events\TransactionCommitted;
+use Illuminate\Database\Events\TransactionRolledBack;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
@@ -47,6 +50,7 @@ final class PermissionsServiceProvider extends PackageServiceProvider
         parent::boot();
 
         $this->registerModelEvents();
+        $this->registerTransactionSettling();
         $this->registerGateCheck();
         $this->registerMemoReset();
     }
@@ -98,7 +102,9 @@ final class PermissionsServiceProvider extends PackageServiceProvider
 
     /**
      * Forget the cached catalog whenever a role or permission is saved or deleted,
-     * so explicit invalidation calls are belt-and-braces rather than load-bearing.
+     * so explicit invalidation calls are belt-and-braces rather than load-bearing —
+     * after the write commits, when it happens inside a transaction (see
+     * {@see PermissionRegistrar::forgetAfterCommit()}).
      *
      * Straight to the registrar, not through the manager: this is the package's own
      * housekeeping, and routing it through `Permissions::cache()` would make the fake
@@ -106,14 +112,35 @@ final class PermissionsServiceProvider extends PackageServiceProvider
      */
     private function registerModelEvents(): void
     {
-        $forget = static function (): void {
-            app(PermissionRegistrar::class)->forget();
+        $forget = static function (Model $model): void {
+            app(PermissionRegistrar::class)->forgetAfterCommit($model->getConnection());
         };
 
         foreach ([PermissionRegistrar::roleModel(), PermissionRegistrar::permissionModel()] as $model) {
             $model::saved($forget);
             $model::deleted($forget);
         }
+    }
+
+    /**
+     * Tell the registrar when a transaction commits or rolls back, so a catalog write made
+     * inside one invalidates the shared cache once it is visible to every process.
+     *
+     * A registrar that was never resolved has nothing pending, so it is not built here.
+     */
+    private function registerTransactionSettling(): void
+    {
+        Event::listen(TransactionCommitted::class, static function (TransactionCommitted $event): void {
+            if (app()->resolved(PermissionRegistrar::class)) {
+                app(PermissionRegistrar::class)->settle($event->connection, committed: true);
+            }
+        });
+
+        Event::listen(TransactionRolledBack::class, static function (TransactionRolledBack $event): void {
+            if (app()->resolved(PermissionRegistrar::class)) {
+                app(PermissionRegistrar::class)->settle($event->connection, committed: false);
+            }
+        });
     }
 
     /**

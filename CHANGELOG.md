@@ -21,7 +21,8 @@ Initial public release.
 - Laravel Gate integration, so the `can:` middleware and `$user->can()` authorize against stored
   permissions — without ever overriding model policies.
 - A `role()` query scope and bigint, UUID or ULID holder keys (`key_type`).
-- A cached permission catalog that invalidates itself on every change and resets per Octane
+- A cached permission catalog that invalidates itself on every change once it commits (never
+  mid-transaction, so concurrent requests can't re-cache a stale catalog) and resets per Octane
   request and queued job; `permissions:cache-reset` for bulk writes.
 - Translatable role and permission `description`s with a configurable locale fallback.
 - `forgetAllAuthorization()` and the `permissions:prune-orphans` command to clean up grants of

@@ -32,6 +32,6 @@ final readonly class ForgetAuthorization
 
         $holder->unsetRelation('roles');
         $holder->unsetRelation('permissions');
-        $this->registrar->forget();
+        $this->registrar->forgetAfterCommit($holder->getConnection());
     }
 }

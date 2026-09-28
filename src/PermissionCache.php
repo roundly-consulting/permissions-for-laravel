@@ -7,15 +7,19 @@ namespace RoundlyConsulting\Permissions;
 /**
  * The permission catalog cache — `Permissions::cache()`.
  *
- * The catalog invalidates itself on every grant and every role/permission save or delete, so
- * you rarely need this. Bulk writes that bypass model events (`insert`, `upsert`, query-builder
- * `delete`, `truncate`) are the exception: call `forget()` after them.
+ * The catalog invalidates itself on every grant and every role/permission save or delete (once
+ * the surrounding transaction commits), so you rarely need this. Bulk writes that bypass model
+ * events (`insert`, `upsert`, query-builder `delete`, `truncate`) are the exception: call
+ * `forget()` after them.
  */
 final readonly class PermissionCache
 {
     public function __construct(private PermissionsManager $manager) {}
 
-    /** Drop the cached catalog from the shared store and this process's memo. */
+    /**
+     * Drop the cached catalog from the shared store and this process's memo — now, and again
+     * when the catalog connection's open transaction commits.
+     */
     public function forget(): void
     {
         $this->manager->forgetCache();

@@ -26,6 +26,6 @@ final readonly class RemoveRoles
         $relation->detach(Grants::roles($roles)->modelKeys());
 
         $holder->unsetRelation('roles');
-        $this->registrar->forget();
+        $this->registrar->forgetAfterCommit($holder->getConnection());
     }
 }

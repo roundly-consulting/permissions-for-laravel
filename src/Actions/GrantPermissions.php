@@ -41,6 +41,6 @@ final readonly class GrantPermissions
         });
 
         $holder->unsetRelation('permissions');
-        $this->registrar->forget();
+        $this->registrar->forgetAfterCommit($holder->getConnection());
     }
 }

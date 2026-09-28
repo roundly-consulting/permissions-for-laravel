@@ -8,6 +8,7 @@ use BackedEnum;
 use Closure;
 use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
+use Illuminate\Database\Connection;
 use Illuminate\Database\Eloquent\Collection;
 use RoundlyConsulting\PackageToolkit\Enums\KeyType;
 use RoundlyConsulting\Permissions\Models\Permission;
@@ -21,6 +22,11 @@ use RoundlyConsulting\Permissions\PermissionsManager;
  *   invalidation. A singleton owned by {@see PermissionsManager}; host code uses
  *   `Permissions::permissions()`, `Permissions::exists()` and `Permissions::cache()`,
  *   so every instance method here is `@internal`.
+ *
+ *   Invalidation follows the transaction, not the write: the shared store is shared with
+ *   processes that cannot see an uncommitted row, so it is dropped when the outermost
+ *   transaction commits. Until then this process reads the catalog live and caches nothing
+ *   (its own write is visible to it; a rollback leaves nothing behind).
  * - **Static side** — public config resolvers: the configured model classes, the five
  *   table names and the holder key type. The published migrations call them, and host
  *   code may too (a custom migration or a raw query that must follow `table_names`).
@@ -37,6 +43,13 @@ final class PermissionRegistrar
      */
     private ?Collection $permissions = null;
 
+    /**
+     * Connections with a catalog write that has not committed yet, by name.
+     *
+     * @var array<string, Connection>
+     */
+    private array $uncommitted = [];
+
     public function __construct(private readonly CacheFactory $cache) {}
 
     /**
@@ -48,6 +61,14 @@ final class PermissionRegistrar
      */
     public function permissions(): Collection
     {
+        $this->settleEndedTransactions();
+
+        if ($this->uncommitted !== []) {
+            // This process wrote inside a transaction that has not committed: only its own
+            // connection sees the write, and it may still roll back. Read live, cache nothing.
+            return $this->hydrate(self::rowLoader()());
+        }
+
         if ($this->permissions instanceof Collection) {
             return $this->permissions;
         }
@@ -173,14 +194,62 @@ final class PermissionRegistrar
     }
 
     /**
-     * Drop the catalog from the shared store and the in-process memo.
+     * Drop the catalog from the shared store and the in-process memo — now, and again when
+     * the catalog connection's open transaction commits (a bulk write inside it is invisible
+     * to everyone else until then, and they may re-cache the old catalog meanwhile).
      *
      * @internal Use `Permissions::cache()->forget()`.
      */
     public function forget(): void
     {
-        $this->permissions = null;
-        $this->cacheStore()->forget(self::cacheKey());
+        $this->drop();
+
+        $connection = PermissionModel::new()->getConnection();
+
+        if ($connection->transactionLevel() > 0) {
+            $this->defer($connection);
+        }
+    }
+
+    /**
+     * Invalidate after a catalog write on this connection: straight away outside a
+     * transaction, otherwise when its outermost transaction commits.
+     *
+     * Forgetting inside the transaction would be too early — a concurrent request (another
+     * connection) would re-cache the pre-commit catalog for the whole TTL.
+     *
+     * @internal The package's model events and grant actions call this.
+     */
+    public function forgetAfterCommit(Connection $connection): void
+    {
+        if ($connection->transactionLevel() === 0) {
+            $this->drop();
+
+            return;
+        }
+
+        $this->defer($connection);
+    }
+
+    /**
+     * A transaction on this connection committed or rolled back. Once the outermost one
+     * ends: a commit drops the shared store (the write is now visible to everyone); a
+     * rollback has nothing to undo, because nothing uncommitted was ever cached.
+     *
+     * @internal The provider calls this from the `TransactionCommitted` /
+     * `TransactionRolledBack` connection events.
+     */
+    public function settle(Connection $connection, bool $committed): void
+    {
+        $name = (string) $connection->getName();
+
+        if (! isset($this->uncommitted[$name]) || $connection->transactionLevel() > 0) {
+            return;
+        }
+
+        unset($this->uncommitted[$name]);
+
+        $committed ? $this->drop() : $this->flushMemo();
     }
 
     /**
@@ -195,6 +264,33 @@ final class PermissionRegistrar
     public function flushMemo(): void
     {
         $this->permissions = null;
+    }
+
+    private function drop(): void
+    {
+        $this->permissions = null;
+        $this->cacheStore()->forget(self::cacheKey());
+    }
+
+    private function defer(Connection $connection): void
+    {
+        $this->permissions = null;
+        $this->uncommitted[(string) $connection->getName()] = $connection;
+    }
+
+    /**
+     * A transaction that ended without its connection event reaching {@see settle()} (no
+     * dispatcher, a faked one, a lost connection) is settled on the next read. Whether it
+     * committed is unknown, and dropping the store is right either way.
+     */
+    private function settleEndedTransactions(): void
+    {
+        foreach ($this->uncommitted as $name => $connection) {
+            if ($connection->transactionLevel() === 0) {
+                unset($this->uncommitted[$name]);
+                $this->drop();
+            }
+        }
     }
 
     /**

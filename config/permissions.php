@@ -105,7 +105,9 @@ return [
     |
     | The registrar caches the permission catalog (id + name) to keep the Gate
     | check cheap. It auto-invalidates on every grant mutation and on role or
-    | permission save/delete. `store` of "default" uses the app's default store.
+    | permission save/delete — after the surrounding transaction commits, so a
+    | concurrent request never re-caches the pre-commit catalog. `store` of
+    | "default" uses the app's default store.
     |
     | The short default TTL is defense-in-depth: bulk writes that bypass model
     | events (seeders using DB::table/insert/upsert/delete/truncate) leave the

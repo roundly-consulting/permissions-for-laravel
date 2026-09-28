@@ -29,6 +29,6 @@ final readonly class RevokePermissions
         });
 
         $holder->unsetRelation('permissions');
-        $this->registrar->forget();
+        $this->registrar->forgetAfterCommit($holder->getConnection());
     }
 }
