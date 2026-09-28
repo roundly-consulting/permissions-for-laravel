@@ -13,31 +13,31 @@ function catalogMemo(PermissionRegistrar $registrar): mixed
 
 it('invalidates the catalog when a permission is created', function (): void {
     $registrar = app(PermissionRegistrar::class);
-    $registrar->getPermissions();
+    $registrar->permissions();
 
     expect(catalogMemo($registrar))->not->toBeNull();
 
     Permission::findOrCreate('auth.users.view');
 
     expect(catalogMemo($registrar))->toBeNull()
-        ->and($registrar->permissionExists('auth.users.view'))->toBeTrue();
+        ->and($registrar->exists('auth.users.view'))->toBeTrue();
 });
 
 it('invalidates the catalog when a permission is deleted', function (): void {
     $permission = Permission::findOrCreate('auth.users.view');
     $registrar = app(PermissionRegistrar::class);
-    $registrar->getPermissions();
+    $registrar->permissions();
 
     $permission->delete();
 
     expect(catalogMemo($registrar))->toBeNull()
-        ->and($registrar->permissionExists('auth.users.view'))->toBeFalse();
+        ->and($registrar->exists('auth.users.view'))->toBeFalse();
 });
 
 it('invalidates the catalog when a role is saved', function (): void {
     $registrar = app(PermissionRegistrar::class);
     Permission::findOrCreate('auth.users.view');
-    $registrar->getPermissions();
+    $registrar->permissions();
 
     Role::findOrCreate('administrator');
 
@@ -47,10 +47,10 @@ it('invalidates the catalog when a role is saved', function (): void {
 it('clears the store so a re-read reflects new rows', function (): void {
     Permission::findOrCreate('auth.users.view');
     $registrar = app(PermissionRegistrar::class);
-    $registrar->getPermissions();
+    $registrar->permissions();
 
     Permission::findOrCreate('auth.users.edit');
 
-    expect($registrar->getPermissions()->pluck('name')->sort()->values()->all())
+    expect($registrar->permissions()->pluck('name')->sort()->values()->all())
         ->toBe(['auth.users.edit', 'auth.users.view']);
 });

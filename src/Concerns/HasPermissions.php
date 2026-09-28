@@ -8,16 +8,17 @@ use BackedEnum;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
-use RoundlyConsulting\Permissions\Enums\GrantMode;
-use RoundlyConsulting\Permissions\Exceptions\PermissionDoesNotExist;
-use RoundlyConsulting\Permissions\Exceptions\PermissionException;
 use RoundlyConsulting\Permissions\Models\Permission;
+use RoundlyConsulting\Permissions\PermissionsManager;
 use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
 
 /**
- * Shared grant/revoke/sync/has logic operating on whatever `permissions()`
- * relation the host exposes (BelongsToMany on Role, MorphToMany on the user).
- * Every using class (Role, and HasRoles consumers) defines `permissions()`.
+ * Direct-permission grants and checks on whatever `permissions()` relation the host exposes
+ * (BelongsToMany on Role, MorphToMany on the user). Every using class (Role, and HasRoles
+ * consumers) defines `permissions()`.
+ *
+ * Writes delegate to the {@see PermissionsManager} (`Permissions::for($this)->…`), so a host's
+ * container override applies and `Permissions::fake()` records them; reads stay on the model.
  *
  * @phpstan-require-extends Model
  */
@@ -30,7 +31,9 @@ trait HasPermissions
      */
     public function givePermissionTo(string|BackedEnum|Permission|iterable ...$permissions): static
     {
-        return $this->applyPermissionGrant($permissions, GrantMode::Additive);
+        app(PermissionsManager::class)->for($this)->givePermissionTo(...$permissions);
+
+        return $this;
     }
 
     /**
@@ -40,7 +43,9 @@ trait HasPermissions
      */
     public function syncPermissions(iterable $permissions): static
     {
-        return $this->applyPermissionGrant([$permissions], GrantMode::Authoritative);
+        app(PermissionsManager::class)->for($this)->syncPermissions($permissions);
+
+        return $this;
     }
 
     /**
@@ -48,14 +53,7 @@ trait HasPermissions
      */
     public function revokePermissionTo(string|BackedEnum|Permission|iterable ...$permissions): static
     {
-        $ids = $this->resolvePermissions($permissions)->modelKeys();
-
-        $this->getConnection()->transaction(function () use ($ids): void {
-            $this->permissions()->detach($ids);
-        });
-
-        $this->unsetRelation('permissions');
-        $this->forgetCachedPermissions();
+        app(PermissionsManager::class)->for($this)->revokePermissionTo(...$permissions);
 
         return $this;
     }
@@ -82,30 +80,6 @@ trait HasPermissions
     }
 
     /**
-     * @param  iterable<mixed>  $permissions
-     */
-    protected function applyPermissionGrant(iterable $permissions, GrantMode $mode): static
-    {
-        $ids = $this->resolvePermissions($permissions)->modelKeys();
-
-        // Wrap detach+attach so a concurrent gate check never observes the empty
-        // mid-sync grant set, and interleaved authoritative syncs can't persist a
-        // union/loss neither caller asked for.
-        $this->getConnection()->transaction(function () use ($ids, $mode): void {
-            if ($mode->detaches()) {
-                $this->permissions()->sync($ids);
-            } else {
-                $this->permissions()->syncWithoutDetaching($ids);
-            }
-        });
-
-        $this->unsetRelation('permissions');
-        $this->forgetCachedPermissions();
-
-        return $this;
-    }
-
-    /**
      * The loaded direct-permission relation (eager-load aware, lazy otherwise).
      *
      * @return EloquentCollection<int, Permission>
@@ -116,76 +90,5 @@ trait HasPermissions
         $permissions = $this->getRelationValue('permissions');
 
         return $permissions;
-    }
-
-    /**
-     * Resolve names / enums / models / nested iterables to a de-duped collection.
-     * Unknown names throw PermissionDoesNotExist.
-     *
-     * @param  iterable<mixed>  $permissions
-     * @return EloquentCollection<int, Permission>
-     */
-    protected function resolvePermissions(iterable $permissions): EloquentCollection
-    {
-        /** @var EloquentCollection<int, Permission> $models */
-        $models = new EloquentCollection;
-        $names = [];
-
-        foreach ($this->flattenGrantArguments($permissions) as $permission) {
-            if ($permission instanceof Permission) {
-                if (! $permission->exists || $permission->getKey() === null) {
-                    throw PermissionException::unsavedModel('Permission');
-                }
-                $models->push($permission);
-            } elseif ($permission instanceof BackedEnum) {
-                $names[] = (string) $permission->value;
-            } elseif (is_string($permission)) {
-                $names[] = $permission;
-            } else {
-                throw PermissionException::invalidType('Permission');
-            }
-        }
-
-        $names = array_values(array_unique($names));
-
-        if ($names !== []) {
-            $model = PermissionRegistrar::permissionModel();
-            $found = $model::query()->whereIn('name', $names)->get();
-
-            if ($found->count() < count($names)) {
-                $missing = array_values(array_diff($names, $found->pluck('name')->all()));
-                throw PermissionDoesNotExist::named((string) $missing[0]);
-            }
-
-            $models = $models->merge($found);
-        }
-
-        return $models->unique(static fn (Permission $permission): mixed => $permission->getKey())->values();
-    }
-
-    /**
-     * @param  iterable<mixed>  $values
-     * @return list<mixed>
-     */
-    protected function flattenGrantArguments(iterable $values): array
-    {
-        $flat = [];
-
-        foreach ($values as $value) {
-            if (is_iterable($value)) {
-                foreach ($this->flattenGrantArguments($value) as $nested) {
-                    $flat[] = $nested;
-                }
-            } else {
-                $flat[] = $value;
-            }
-        }
-
-        return $flat;
-    }
-
-    protected function forgetCachedPermissions(): void
-    {
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 }

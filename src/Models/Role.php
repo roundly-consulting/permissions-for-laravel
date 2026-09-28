@@ -12,8 +12,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use RoundlyConsulting\Permissions\Concerns\HasPermissions;
 use RoundlyConsulting\Permissions\Concerns\TranslatesDescription;
 use RoundlyConsulting\Permissions\Database\Factories\RoleFactory;
+use RoundlyConsulting\Permissions\PermissionsManager;
 use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
-use RoundlyConsulting\Permissions\Support\RoleModel;
 
 /**
  * @property int $id
@@ -47,14 +47,14 @@ class Role extends Model
      * Idempotently register a role, returning the model configured at
      * `permissions.models.role`.
      *
-     * Resolved through the config seam rather than `static::`, so a host that
-     * swapped the model gets *its* class back — and the row is created as that
-     * class, which is what fires the model events the provider hangs the catalog
-     * cache invalidation on.
+     * Sugar for `Permissions::role($name)`: resolved through the config seam
+     * rather than `static::`, so a host that swapped the model gets *its* class
+     * back — and the row is created as that class, which is what fires the model
+     * events the provider hangs the catalog cache invalidation on.
      */
     public static function findOrCreate(string|BackedEnum $name): self
     {
-        return RoleModel::query()->createOrFirst(['name' => PermissionRegistrar::nameOf($name)]);
+        return app(PermissionsManager::class)->role($name);
     }
 
     /**

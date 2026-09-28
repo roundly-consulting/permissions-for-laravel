@@ -15,6 +15,8 @@ use RoundlyConsulting\Permissions\Models\Role;
  * real Eloquent model) and narrows the result to this package's own base class — the
  * package calls `Role`'s own API (`permissions()`, `name`, the grant traits), so a real
  * model that is not a `Role` falls back to the packaged one rather than fataling later.
+ *
+ * @internal Host code uses `Permissions::roleModel()`, `Permissions::roles()` and friends.
  */
 final class RoleModel
 {

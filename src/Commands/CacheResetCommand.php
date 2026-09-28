@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Permissions\Commands;
 
 use Illuminate\Console\Command;
-use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
+use RoundlyConsulting\Permissions\PermissionsManager;
 
 final class CacheResetCommand extends Command
 {
@@ -15,9 +15,9 @@ final class CacheResetCommand extends Command
     /** @var string */
     protected $description = 'Flush the cached permission catalog.';
 
-    public function handle(PermissionRegistrar $registrar): int
+    public function handle(PermissionsManager $permissions): int
     {
-        $registrar->forgetCachedPermissions();
+        $permissions->cache()->forget();
 
         $this->info('Permission cache flushed.');
 

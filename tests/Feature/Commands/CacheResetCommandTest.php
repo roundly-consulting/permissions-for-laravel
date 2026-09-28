@@ -8,7 +8,7 @@ use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
 it('flushes the permission cache and exits successfully', function (): void {
     Permission::findOrCreate('auth.users.view');
     $registrar = app(PermissionRegistrar::class);
-    $registrar->getPermissions();
+    $registrar->permissions();
 
     $this->artisan('permissions:cache-reset')
         ->assertExitCode(0);

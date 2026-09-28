@@ -10,15 +10,19 @@ use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Support\Collection;
-use RoundlyConsulting\Permissions\Exceptions\PermissionException;
-use RoundlyConsulting\Permissions\Exceptions\RoleDoesNotExist;
 use RoundlyConsulting\Permissions\Models\Permission;
 use RoundlyConsulting\Permissions\Models\Role;
+use RoundlyConsulting\Permissions\PermissionsManager;
+use RoundlyConsulting\Permissions\Support\Grants;
 use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
 
 /**
  * Gives any Authenticatable model roles and direct permissions, and resolves
  * effective permissions (direct union via-roles).
+ *
+ * Writes delegate to the {@see PermissionsManager} (`Permissions::for($this)->…`), so a
+ * host's container override applies and `Permissions::fake()` records them; reads stay on
+ * the model.
  *
  * @phpstan-require-extends Model
  */
@@ -55,13 +59,13 @@ trait HasRoles
     }
 
     /**
+     * Additively assign roles — never detaches a role another caller assigned.
+     *
      * @param  string|BackedEnum|Role|iterable<mixed>  ...$roles
      */
     public function assignRole(string|BackedEnum|Role|iterable ...$roles): static
     {
-        $this->roles()->syncWithoutDetaching($this->resolveRoles($roles)->modelKeys());
-        $this->unsetRelation('roles');
-        $this->forgetCachedPermissions();
+        app(PermissionsManager::class)->for($this)->assignRole(...$roles);
 
         return $this;
     }
@@ -71,28 +75,19 @@ trait HasRoles
      */
     public function removeRole(string|BackedEnum|Role|iterable ...$roles): static
     {
-        $this->roles()->detach($this->resolveRoles($roles)->modelKeys());
-        $this->unsetRelation('roles');
-        $this->forgetCachedPermissions();
+        app(PermissionsManager::class)->for($this)->removeRole(...$roles);
 
         return $this;
     }
 
     /**
+     * Make the given roles the exact, complete set (detaches the rest).
+     *
      * @param  iterable<mixed>  $roles
      */
     public function syncRoles(iterable $roles): static
     {
-        $ids = $this->resolveRoles([$roles])->modelKeys();
-
-        // Wrap detach+attach so a concurrent gate check never observes the empty
-        // mid-sync role set.
-        $this->getConnection()->transaction(function () use ($ids): void {
-            $this->roles()->sync($ids);
-        });
-
-        $this->unsetRelation('roles');
-        $this->forgetCachedPermissions();
+        app(PermissionsManager::class)->for($this)->syncRoles($roles);
 
         return $this;
     }
@@ -107,14 +102,7 @@ trait HasRoles
      */
     public function forgetAllAuthorization(): static
     {
-        $this->getConnection()->transaction(function (): void {
-            $this->roles()->detach();
-            $this->permissions()->detach();
-        });
-
-        $this->unsetRelation('roles');
-        $this->unsetRelation('permissions');
-        $this->forgetCachedPermissions();
+        app(PermissionsManager::class)->for($this)->forgetAllAuthorization();
 
         return $this;
     }
@@ -124,7 +112,7 @@ trait HasRoles
      */
     public function hasRole(string|BackedEnum|iterable $role): bool
     {
-        $names = $this->normalizeRoleNames($role);
+        $names = Grants::names($role, Role::class, 'Role');
 
         return $this->relatedRoles()->contains(
             static fn (Role $candidate): bool => in_array($candidate->name, $names, true),
@@ -186,7 +174,7 @@ trait HasRoles
      */
     public function scopeRole(Builder $query, string|BackedEnum|iterable $role): Builder
     {
-        $names = $this->normalizeRoleNames($role);
+        $names = Grants::names($role, Role::class, 'Role');
 
         return $query->whereHas('roles', static function (Builder $roles) use ($names): void {
             $roles->whereIn('name', $names);
@@ -204,74 +192,5 @@ trait HasRoles
         $roles = $this->getRelationValue('roles');
 
         return $roles;
-    }
-
-    /**
-     * @param  string|BackedEnum|iterable<mixed>  $role
-     * @return list<string>
-     */
-    protected function normalizeRoleNames(string|BackedEnum|iterable $role): array
-    {
-        $values = is_iterable($role) ? $role : [$role];
-        $names = [];
-
-        foreach ($this->flattenGrantArguments($values) as $item) {
-            if ($item instanceof Role) {
-                $names[] = $item->name;
-            } elseif ($item instanceof BackedEnum) {
-                $names[] = (string) $item->value;
-            } elseif (is_string($item)) {
-                $names[] = $item;
-            } else {
-                throw PermissionException::invalidType('Role');
-            }
-        }
-
-        return array_values(array_unique($names));
-    }
-
-    /**
-     * Resolve names / enums / models / nested iterables to a de-duped collection.
-     * Unknown names throw RoleDoesNotExist.
-     *
-     * @param  iterable<mixed>  $roles
-     * @return EloquentCollection<int, Role>
-     */
-    protected function resolveRoles(iterable $roles): EloquentCollection
-    {
-        /** @var EloquentCollection<int, Role> $models */
-        $models = new EloquentCollection;
-        $names = [];
-
-        foreach ($this->flattenGrantArguments($roles) as $role) {
-            if ($role instanceof Role) {
-                if (! $role->exists || $role->getKey() === null) {
-                    throw PermissionException::unsavedModel('Role');
-                }
-                $models->push($role);
-            } elseif ($role instanceof BackedEnum) {
-                $names[] = (string) $role->value;
-            } elseif (is_string($role)) {
-                $names[] = $role;
-            } else {
-                throw PermissionException::invalidType('Role');
-            }
-        }
-
-        $names = array_values(array_unique($names));
-
-        if ($names !== []) {
-            $model = PermissionRegistrar::roleModel();
-            $found = $model::query()->whereIn('name', $names)->get();
-
-            if ($found->count() < count($names)) {
-                $missing = array_values(array_diff($names, $found->pluck('name')->all()));
-                throw RoleDoesNotExist::named((string) $missing[0]);
-            }
-
-            $models = $models->merge($found);
-        }
-
-        return $models->unique(static fn (Role $role): mixed => $role->getKey())->values();
     }
 }

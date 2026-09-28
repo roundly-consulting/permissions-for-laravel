@@ -81,7 +81,7 @@ it('authorizes through the gate right after a swapped-model permission is create
 
     // Warm the catalog the way any earlier gate check would, so a missing invalidation
     // leaves something stale to find.
-    Permissions::getPermissions();
+    Permissions::permissions();
 
     expect('permissions.models.permission')->toHonourModelSwap(CustomPermission::class, function () use ($user): array {
         $permission = Permission::findOrCreate('posts.publish');

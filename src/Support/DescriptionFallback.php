@@ -12,6 +12,8 @@ use RoundlyConsulting\Translatable\Enums\FallbackMode;
  * null): the least-surprising, non-disclosing choice, so an untranslated description
  * never surfaces content from an unrelated locale. A host opts into `Any` (first
  * available) or `None` (exact only) via config or a per-model override.
+ *
+ * @internal Configure `permissions.description_fallback` instead.
  */
 final class DescriptionFallback
 {

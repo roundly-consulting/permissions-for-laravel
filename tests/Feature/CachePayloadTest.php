@@ -17,7 +17,7 @@ use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
 it('caches only scalars so a no-classes unserialize policy still works', function (): void {
     Permission::findOrCreate('auth.users.view');
 
-    app(PermissionRegistrar::class)->getPermissions();
+    app(PermissionRegistrar::class)->permissions();
 
     $cached = Cache::get(config('permissions.cache.key'));
 
@@ -37,16 +37,16 @@ it('still returns usable models built from the cached scalars', function (): voi
     Permission::findOrCreate('auth.users.view');
 
     $registrar = app(PermissionRegistrar::class);
-    $registrar->getPermissions();
+    $registrar->permissions();
     $registrar->flushMemo(); // force a read back through the cache
 
-    $permissions = $registrar->getPermissions();
+    $permissions = $registrar->permissions();
 
     expect($permissions->first())->toBeInstanceOf(Permission::class)
         ->and($permissions->first()->name)->toBe('auth.users.view')
         ->and($permissions->first()->getKey())->not->toBeNull()
         ->and($permissions->first()->exists)->toBeTrue()
-        ->and($registrar->permissionExists('auth.users.view'))->toBeTrue();
+        ->and($registrar->exists('auth.users.view'))->toBeTrue();
 });
 
 it('rebuilds the catalog when the cached payload is in an unreadable shape', function (): void {
@@ -59,6 +59,6 @@ it('rebuilds the catalog when the cached payload is in an unreadable shape', fun
     $registrar = app(PermissionRegistrar::class);
     $registrar->flushMemo();
 
-    expect($registrar->permissionExists('auth.users.view'))->toBeTrue()
+    expect($registrar->exists('auth.users.view'))->toBeTrue()
         ->and(Cache::get(config('permissions.cache.key')))->toBeArray();
 });

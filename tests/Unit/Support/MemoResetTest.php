@@ -14,7 +14,7 @@ function memoValue(PermissionRegistrar $registrar): mixed
 it('flushes only the in-process memo, leaving the shared store intact', function (): void {
     Permission::findOrCreate('auth.users.view');
     $registrar = app(PermissionRegistrar::class);
-    $registrar->getPermissions();
+    $registrar->permissions();
 
     expect(memoValue($registrar))->not->toBeNull();
 
@@ -24,7 +24,7 @@ it('flushes only the in-process memo, leaving the shared store intact', function
 
     // The next read is served from the shared store — no database round-trip.
     DB::enableQueryLog();
-    $permissions = $registrar->getPermissions();
+    $permissions = $registrar->permissions();
     $queries = count(DB::getQueryLog());
     DB::disableQueryLog();
 
@@ -35,7 +35,7 @@ it('flushes only the in-process memo, leaving the shared store intact', function
 it('flushes the memo at an octane request boundary', function (): void {
     Permission::findOrCreate('auth.users.view');
     $registrar = app(PermissionRegistrar::class);
-    $registrar->getPermissions();
+    $registrar->permissions();
 
     expect(memoValue($registrar))->not->toBeNull();
 
@@ -47,15 +47,15 @@ it('flushes the memo at an octane request boundary', function (): void {
 
 it('lets a fresh registrar re-read the store after invalidation', function (): void {
     Permission::findOrCreate('auth.users.view');
-    app(PermissionRegistrar::class)->getPermissions();
+    app(PermissionRegistrar::class)->permissions();
 
-    app(PermissionRegistrar::class)->forgetCachedPermissions();
+    app(PermissionRegistrar::class)->forget();
 
     // A bulk insert bypasses model events; the store was already cleared above.
     Permission::query()->getConnection()->table('permissions')->insert(['name' => 'auth.users.edit']);
 
     $fresh = new PermissionRegistrar(app('cache'));
 
-    expect($fresh->getPermissions()->pluck('name')->sort()->values()->all())
+    expect($fresh->permissions()->pluck('name')->sort()->values()->all())
         ->toBe(['auth.users.edit', 'auth.users.view']);
 });

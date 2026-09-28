@@ -14,12 +14,12 @@ it('memoizes the catalog so a second lookup runs no query', function (): void {
     Permission::findOrCreate('auth.users.view');
 
     $registrar = app(PermissionRegistrar::class);
-    $registrar->forgetCachedPermissions();
+    $registrar->forget();
 
     DB::enableQueryLog();
-    $registrar->getPermissions();
+    $registrar->permissions();
     $afterFirst = count(DB::getQueryLog());
-    $registrar->getPermissions();
+    $registrar->permissions();
     $afterSecond = count(DB::getQueryLog());
     DB::disableQueryLog();
 
@@ -30,12 +30,12 @@ it('memoizes the catalog so a second lookup runs no query', function (): void {
 it('serves a fresh registrar from the store without a query', function (): void {
     Permission::findOrCreate('auth.users.view');
 
-    app(PermissionRegistrar::class)->getPermissions();
+    app(PermissionRegistrar::class)->permissions();
 
     $fresh = new PermissionRegistrar(app('cache'));
 
     DB::enableQueryLog();
-    $permissions = $fresh->getPermissions();
+    $permissions = $fresh->permissions();
     $queries = count(DB::getQueryLog());
     DB::disableQueryLog();
 
@@ -48,26 +48,26 @@ it('reports whether a permission exists by string or enum', function (): void {
 
     $registrar = app(PermissionRegistrar::class);
 
-    expect($registrar->permissionExists('auth.users.view'))->toBeTrue()
-        ->and($registrar->permissionExists(PermissionName::ViewUsers))->toBeTrue()
-        ->and($registrar->permissionExists('auth.users.delete'))->toBeFalse();
+    expect($registrar->exists('auth.users.view'))->toBeTrue()
+        ->and($registrar->exists(PermissionName::ViewUsers))->toBeTrue()
+        ->and($registrar->exists('auth.users.delete'))->toBeFalse();
 });
 
 it('forgets the store and memo on invalidation', function (): void {
     Permission::findOrCreate('auth.users.view');
     $registrar = app(PermissionRegistrar::class);
-    $registrar->getPermissions();
+    $registrar->permissions();
 
     Permission::query()->getConnection()->table('permissions')->insert([
         'name' => 'auth.users.edit',
     ]);
 
     // Still memoized — the raw insert bypassed model events.
-    expect($registrar->permissionExists('auth.users.edit'))->toBeFalse();
+    expect($registrar->exists('auth.users.edit'))->toBeFalse();
 
-    $registrar->forgetCachedPermissions();
+    $registrar->forget();
 
-    expect($registrar->permissionExists('auth.users.edit'))->toBeTrue();
+    expect($registrar->exists('auth.users.edit'))->toBeTrue();
 });
 
 it('normalizes names from strings and backed enums', function (): void {
@@ -95,5 +95,5 @@ it('falls back to defaults for non-string cache config', function (): void {
 
     $registrar = new PermissionRegistrar(app('cache'));
 
-    expect($registrar->getPermissions()->pluck('name')->all())->toBe(['auth.users.view']);
+    expect($registrar->permissions()->pluck('name')->all())->toBe(['auth.users.view']);
 });

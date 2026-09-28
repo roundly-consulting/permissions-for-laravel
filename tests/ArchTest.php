@@ -5,6 +5,7 @@ declare(strict_types=1);
 use RoundlyConsulting\Permissions\Exceptions\PermissionException;
 use RoundlyConsulting\Permissions\Models\Permission;
 use RoundlyConsulting\Permissions\Models\Role;
+use RoundlyConsulting\Permissions\PermissionsManager;
 use RoundlyConsulting\Testing\Arch\ArchPresets;
 
 /**
@@ -23,11 +24,13 @@ ArchPresets::strictTypes('RoundlyConsulting\Permissions');
  * green "everything is final" arch tests.
  *
  * Exempt from the first: Role and Permission, which `permissions.models.*` explicitly
- * invites a host to subclass ("Swap either model for a subclass"), and PermissionException,
- * the base every permissions error extends so a host can catch them uniformly.
+ * invites a host to subclass ("Swap either model for a subclass"), PermissionException,
+ * the base every permissions error extends so a host can catch them uniformly, and
+ * PermissionsManager, which `Permissions::fake()`'s PermissionsFake extends — the fake must
+ * be a subtype of the facade root, or constructor-injected managers TypeError under it.
  */
 ArchPresets::finalByDefault('RoundlyConsulting\Permissions')
-    ->ignoring([Role::class, Permission::class, PermissionException::class]);
+    ->ignoring([Role::class, Permission::class, PermissionException::class, PermissionsManager::class]);
 
 /**
  * The counter-weight. Also pins that each key really defaults to the packaged model, so
@@ -79,6 +82,13 @@ ArchPresets::runtimeRequireIsWhitelisted(__DIR__.'/../composer.json');
 ArchPresets::noDebuggingLeftovers();
 
 /**
+ * One path for writes: the HasRoles / HasPermissions traits and the models' `findOrCreate()`
+ * delegate to PermissionsManager (`Permissions::for($this)->…`), never to an action, so a
+ * host's container override applies and `Permissions::fake()` records trait calls too.
+ */
+ArchPresets::modelsGoThroughTheFacade('RoundlyConsulting\Permissions');
+
+/**
  * Bespoke, kept — no preset equivalent.
  *
  * Guard against any third-party runtime vendor sneaking into src/. Allow-listing only the
@@ -100,10 +110,16 @@ arch('src only uses allowed vendor roots')
         // native helpers used unqualified
         'app',
         'class_basename',
+        'class_uses_recursive',
         'config',
         'event',
         '__',
-    ]);
+    ])
+    // PermissionsFake asserts with PHPUnit, which every Laravel app has in require-dev; it is
+    // test support shipped in src/, never reached at runtime. Pest's arch layer cannot match a
+    // PHPUnit class as an allowed root, so it is named here, exactly — nothing else from
+    // PHPUnit is permitted.
+    ->ignoring('PHPUnit\Framework\Assert');
 
 arch('exceptions live in an Exceptions namespace')
     ->expect('RoundlyConsulting\Permissions\Exceptions')

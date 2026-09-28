@@ -39,6 +39,7 @@ final class PermissionsServiceProvider extends PackageServiceProvider
         $this->registerBlueprintMacros();
 
         $this->app->singleton(PermissionRegistrar::class);
+        $this->app->singleton(PermissionsManager::class);
     }
 
     public function boot(): void
@@ -98,11 +99,15 @@ final class PermissionsServiceProvider extends PackageServiceProvider
     /**
      * Forget the cached catalog whenever a role or permission is saved or deleted,
      * so explicit invalidation calls are belt-and-braces rather than load-bearing.
+     *
+     * Straight to the registrar, not through the manager: this is the package's own
+     * housekeeping, and routing it through `Permissions::cache()` would make the fake
+     * record a cache flush on every role save.
      */
     private function registerModelEvents(): void
     {
         $forget = static function (): void {
-            app(PermissionRegistrar::class)->forgetCachedPermissions();
+            app(PermissionRegistrar::class)->forget();
         };
 
         foreach ([PermissionRegistrar::roleModel(), PermissionRegistrar::permissionModel()] as $model) {
@@ -134,7 +139,7 @@ final class PermissionsServiceProvider extends PackageServiceProvider
                 return null; // not a role holder — let normal gates/policies run
             }
 
-            if (! app(PermissionRegistrar::class)->permissionExists($ability)) {
+            if (! app(PermissionsManager::class)->exists($ability)) {
                 return null; // not one of our permissions — pass through (never false)
             }
 
@@ -145,7 +150,8 @@ final class PermissionsServiceProvider extends PackageServiceProvider
     /**
      * Reset the registrar's in-process memo at request/job boundaries so a
      * long-lived worker (Octane, queue) never serves a memo that outlived its
-     * authority. The shared cache store remains the source of truth.
+     * authority. The shared cache store remains the source of truth. Straight to
+     * the registrar for the same reason as the model events above.
      */
     private function registerMemoReset(): void
     {

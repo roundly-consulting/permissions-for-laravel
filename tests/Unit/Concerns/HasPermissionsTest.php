@@ -79,7 +79,7 @@ it('forgets the cache on every grant mutator', function (): void {
     $role = Role::findOrCreate('administrator');
     $registrar = app(PermissionRegistrar::class);
 
-    $registrar->getPermissions(); // warm
+    $registrar->permissions(); // warm
     $role->givePermissionTo('auth.users.view');
 
     $reflection = new ReflectionProperty($registrar, 'permissions');

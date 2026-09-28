@@ -8,6 +8,7 @@ use RoundlyConsulting\Permissions\Models\Permission;
 use RoundlyConsulting\Permissions\Models\Role;
 use RoundlyConsulting\Permissions\Tests\Fixtures\CustomPermission;
 use RoundlyConsulting\Permissions\Tests\Fixtures\CustomRole;
+use RoundlyConsulting\Permissions\Tests\Fixtures\RoleName;
 use RoundlyConsulting\Permissions\Tests\Fixtures\User;
 
 it('creates roles and permissions as the configured model', function (): void {
@@ -27,19 +28,19 @@ it('creates roles and permissions as the configured model', function (): void {
 
 it('invalidates the catalog cache when a permission is registered', function (): void {
     // Warm the catalog the way any earlier gate check would.
-    Permissions::getPermissions();
+    Permissions::permissions();
 
     Permission::findOrCreate('posts.edit');
 
     // The provider's invalidation listener lives on the *configured* model. If
     // findOrCreate created a packaged Permission, this stays stale for the whole
     // cache TTL and the Gate hook answers "not one of ours" for a real permission.
-    expect(Permissions::permissionExists('posts.edit'))->toBeTrue()
-        ->and(Permissions::getPermissions()->pluck('name')->all())->toBe(['posts.edit']);
+    expect(Permissions::exists('posts.edit'))->toBeTrue()
+        ->and(Permissions::permissions()->pluck('name')->all())->toBe(['posts.edit']);
 });
 
 it('authorizes through the gate immediately after registering a permission', function (): void {
-    Permissions::getPermissions();
+    Permissions::permissions();
 
     $role = Role::findOrCreate('editor');
     $role->givePermissionTo(Permission::findOrCreate('posts.edit')->name);
@@ -94,4 +95,24 @@ it('scopes a query by role on the configured model', function (): void {
     User::query()->create(['name' => 'bob']);
 
     expect(User::query()->role('editor')->pluck('name')->all())->toBe(['ada']);
+});
+
+it('registers, finds, lists and syncs through the facade as the configured models', function (): void {
+    $role = Permissions::role('editor');
+    $permission = Permissions::permission('posts.edit');
+    $synced = Permissions::syncRolesFrom(RoleName::class);
+
+    expect($role)->toBeInstanceOf(CustomRole::class)
+        ->and($permission)->toBeInstanceOf(CustomPermission::class)
+        ->and(Permissions::roleModel())->toBe(CustomRole::class)
+        ->and(Permissions::permissionModel())->toBe(CustomPermission::class)
+        ->and(Permissions::findRole('editor'))->toBeInstanceOf(CustomRole::class)
+        ->and(Permissions::findPermission('posts.edit'))->toBeInstanceOf(CustomPermission::class)
+        ->and(Permissions::roles()->every(fn ($role): bool => $role instanceof CustomRole))->toBeTrue()
+        ->and($synced->created)->toBe(['administrator'])
+        ->and($synced->existing)->toBe(['editor'])
+        // One row per findOrCreate + one for the synced case: every row went through the
+        // host's model, so its events fired.
+        ->and(CustomRole::$creationCount)->toBe(2)
+        ->and(CustomPermission::$creationCount)->toBe(1);
 });

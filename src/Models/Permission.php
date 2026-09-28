@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use RoundlyConsulting\Permissions\Concerns\TranslatesDescription;
 use RoundlyConsulting\Permissions\Database\Factories\PermissionFactory;
-use RoundlyConsulting\Permissions\Support\PermissionModel;
+use RoundlyConsulting\Permissions\PermissionsManager;
 use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
 
 /**
@@ -45,14 +45,14 @@ class Permission extends Model
      * Idempotently register a permission, returning the model configured at
      * `permissions.models.permission`.
      *
-     * Resolved through the config seam rather than `static::`, so a host that
-     * swapped the model gets *its* class back — and the row is created as that
-     * class, which is what fires the model events the provider hangs the catalog
-     * cache invalidation on.
+     * Sugar for `Permissions::permission($name)`: resolved through the config seam
+     * rather than `static::`, so a host that swapped the model gets *its* class
+     * back — and the row is created as that class, which is what fires the model
+     * events the provider hangs the catalog cache invalidation on.
      */
     public static function findOrCreate(string|BackedEnum $name): self
     {
-        return PermissionModel::query()->createOrFirst(['name' => PermissionRegistrar::nameOf($name)]);
+        return app(PermissionsManager::class)->permission($name);
     }
 
     /**

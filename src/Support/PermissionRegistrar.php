@@ -12,10 +12,18 @@ use Illuminate\Database\Eloquent\Collection;
 use RoundlyConsulting\PackageToolkit\Enums\KeyType;
 use RoundlyConsulting\Permissions\Models\Permission;
 use RoundlyConsulting\Permissions\Models\Role;
+use RoundlyConsulting\Permissions\PermissionsManager;
 
 /**
- * The single public service: model resolution from config, the permission
- * catalog cache, and name normalization (string|BackedEnum -> string).
+ * The permission catalog cache and the package's config resolvers.
+ *
+ * - **Instance side** — the cached catalog (id + name), its in-process memo, and
+ *   invalidation. A singleton owned by {@see PermissionsManager}; host code uses
+ *   `Permissions::permissions()`, `Permissions::exists()` and `Permissions::cache()`,
+ *   so every instance method here is `@internal`.
+ * - **Static side** — public config resolvers: the configured model classes, the five
+ *   table names and the holder key type. The published migrations call them, and host
+ *   code may too (a custom migration or a raw query that must follow `table_names`).
  *
  * Every config read here is a **literal** key, so the config-contract test can
  * scrape them out of the source and pin them against the shipped config file.
@@ -34,9 +42,11 @@ final class PermissionRegistrar
     /**
      * The permission catalog (id + name), cached; relations resolve live.
      *
+     * @internal Use `Permissions::permissions()`.
+     *
      * @return Collection<int, Permission>
      */
-    public function getPermissions(): Collection
+    public function permissions(): Collection
     {
         if ($this->permissions instanceof Collection) {
             return $this->permissions;
@@ -150,16 +160,24 @@ final class PermissionRegistrar
         return true;
     }
 
-    public function permissionExists(string|BackedEnum $name): bool
+    /**
+     * @internal Use `Permissions::exists()`.
+     */
+    public function exists(string|BackedEnum $name): bool
     {
         $name = self::nameOf($name);
 
-        return $this->getPermissions()->contains(
+        return $this->permissions()->contains(
             static fn (Permission $permission): bool => $permission->name === $name,
         );
     }
 
-    public function forgetCachedPermissions(): void
+    /**
+     * Drop the catalog from the shared store and the in-process memo.
+     *
+     * @internal Use `Permissions::cache()->forget()`.
+     */
+    public function forget(): void
     {
         $this->permissions = null;
         $this->cacheStore()->forget(self::cacheKey());
@@ -171,49 +189,71 @@ final class PermissionRegistrar
      * Called at request/job boundaries (Octane, queue workers) so a long-lived
      * worker never serves a memo that outlived its authority — the next lookup
      * re-reads the shared store, which invalidation propagates through.
+     *
+     * @internal Use `Permissions::cache()->flushMemo()`.
      */
     public function flushMemo(): void
     {
         $this->permissions = null;
     }
 
+    /**
+     * Normalize a name: a backed enum becomes its `value`.
+     *
+     * @internal Every name-taking method already accepts either form.
+     */
     public static function nameOf(string|BackedEnum $value): string
     {
         return $value instanceof BackedEnum ? (string) $value->value : $value;
     }
 
-    /** @return class-string<Role> */
+    /**
+     * The configured role class (`permissions.models.role`); `Permissions::roleModel()` is the
+     * facade form.
+     *
+     * @return class-string<Role>
+     */
     public static function roleModel(): string
     {
         return RoleModel::class();
     }
 
-    /** @return class-string<Permission> */
+    /**
+     * The configured permission class (`permissions.models.permission`);
+     * `Permissions::permissionModel()` is the facade form.
+     *
+     * @return class-string<Permission>
+     */
     public static function permissionModel(): string
     {
         return PermissionModel::class();
     }
 
+    /** The `table_names.roles` table. */
     public static function rolesTable(): string
     {
         return self::tableName('permissions.table_names.roles', 'roles');
     }
 
+    /** The `table_names.permissions` table. */
     public static function permissionsTable(): string
     {
         return self::tableName('permissions.table_names.permissions', 'permissions');
     }
 
+    /** The `table_names.permission_role` role↔permission pivot. */
     public static function permissionRoleTable(): string
     {
         return self::tableName('permissions.table_names.permission_role', 'permission_role');
     }
 
+    /** The `table_names.model_roles` holder↔role morph pivot. */
     public static function modelRolesTable(): string
     {
         return self::tableName('permissions.table_names.model_roles', 'model_roles');
     }
 
+    /** The `table_names.model_permissions` holder↔permission morph pivot. */
     public static function modelPermissionsTable(): string
     {
         return self::tableName('permissions.table_names.model_permissions', 'model_permissions');

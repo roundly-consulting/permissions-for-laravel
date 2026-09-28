@@ -6,20 +6,21 @@ use RoundlyConsulting\Permissions\Facades\Permissions;
 use RoundlyConsulting\Permissions\Models\Permission;
 use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
 
-it('proxies the registrar through the facade', function (): void {
+it('answers catalog reads from the registrar behind the facade', function (): void {
     Permission::findOrCreate('auth.users.view');
 
-    expect(Permissions::permissionExists('auth.users.view'))->toBeTrue()
-        ->and(Permissions::permissionExists('auth.users.edit'))->toBeFalse()
-        ->and(Permissions::getPermissions()->pluck('name')->all())->toBe(['auth.users.view']);
+    expect(Permissions::exists('auth.users.view'))->toBeTrue()
+        ->and(Permissions::exists('auth.users.edit'))->toBeFalse()
+        ->and(Permissions::permissions()->pluck('name')->all())->toBe(['auth.users.view'])
+        ->and(Permissions::permissions())->toBe(app(PermissionRegistrar::class)->permissions());
 });
 
 it('forgets the cache through the facade', function (): void {
     Permission::findOrCreate('auth.users.view');
     $registrar = app(PermissionRegistrar::class);
-    $registrar->getPermissions();
+    $registrar->permissions();
 
-    Permissions::forgetCachedPermissions();
+    Permissions::cache()->forget();
 
     $memo = (new ReflectionProperty($registrar, 'permissions'))->getValue($registrar);
 

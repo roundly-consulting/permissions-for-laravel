@@ -127,7 +127,7 @@ it('invalidates the catalog after every grant mutation', function (): void {
         fn () => $user->removeRole('editor'),
         fn () => $user->forgetAllAuthorization(),
     ] as $mutation) {
-        Permissions::getPermissions();
+        Permissions::permissions();
         app('cache')->put('permissions.cache', collect(), 300);
 
         $mutation();
