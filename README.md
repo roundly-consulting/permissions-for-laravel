@@ -134,6 +134,27 @@ PERMISSIONS_KEY_TYPE=uuid
 
 ## Usage
 
+Everything goes through the `Permissions` facade — or, for dependency injection, the
+`PermissionsManager` behind it (see [Without the facade](#without-the-facade)). The
+`HasRoles` / `HasPermissions` traits put the grant verbs on your models too; they delegate to
+the same manager, so every path runs the same code.
+
+| Method | Returns | Purpose |
+|---|---|---|
+| `Permissions::role($name)` | `Role` | Find or create a role (as your configured model). |
+| `Permissions::permission($name)` | `Permission` | Find or create a permission. |
+| `Permissions::findRole($name)` / `findPermission($name)` | `?Role` / `?Permission` | Look one up by name; `null` when missing. |
+| `Permissions::roles()` | `Collection<Role>` | Every role, ordered by name. |
+| `Permissions::permissions()` | `Collection<Permission>` | The cached permission catalog (`id` + `name`). |
+| `Permissions::exists($name)` | `bool` | Whether a permission is registered (answered from the cache). |
+| `Permissions::syncFrom(Enum::class)` / `syncRolesFrom(Enum::class)` | `SyncResult` | Register a row per case of a backed enum. |
+| `Permissions::for($holder)` | `HolderGrants` | Role and permission writes for one holder. |
+| `Permissions::cache()->forget()` / `->flushMemo()` | `void` | Flush the catalog cache / this process's memo. |
+| `Permissions::pruneOrphans()` | `int` | Delete grant rows whose holder no longer exists. |
+| `Permissions::roleModel()` / `permissionModel()` | `class-string` | Your configured model classes. |
+
+Every name-taking method accepts a `string` or a `BackedEnum`.
+
 ### Add the trait
 
 Add `HasRoles` to any authenticatable model. There is no `$guard_name` to set.
@@ -150,16 +171,30 @@ class User extends Authenticatable
 
 ### Create roles and permissions
 
-`findOrCreate` is idempotent under the unique `name` index, and it creates and returns the
-model you configured at `permissions.models.*` — so a host subclass gets its own class back,
-its own model events, and its own observers:
+`role()` and `permission()` are idempotent under the unique `name` index, and they create and
+return the model you configured at `permissions.models.*` — so a host subclass gets its own
+class back, its own model events, and its own observers:
 
 ```php
-use RoundlyConsulting\Permissions\Models\Permission;
-use RoundlyConsulting\Permissions\Models\Role;
+use RoundlyConsulting\Permissions\Facades\Permissions;
 
-$role = Role::findOrCreate('administrator');
-$permission = Permission::findOrCreate('auth.users.view');
+$role = Permissions::role('administrator');
+$permission = Permissions::permission('auth.users.view');
+
+// The same thing, from the models:
+Role::findOrCreate('administrator');
+Permission::findOrCreate('auth.users.view');
+```
+
+Look them up or list them:
+
+```php
+Permissions::findRole('administrator');        // ?Role
+Permissions::findPermission('auth.users.view'); // ?Permission — the full row
+Permissions::roles();                           // every role, ordered by name
+Permissions::permissions();                     // the cached catalog: id + name only
+Permissions::exists('auth.users.view');         // bool, from the cache
+Permissions::roleModel()::query()->where(...);  // a query on your configured model
 ```
 
 Both models carry an optional translatable `description`, powered by
@@ -186,6 +221,34 @@ $permission->getTranslation('description', 'sk'); // "Zobraziť používateľov"
 property access — not the raw JSON map. See [Integrates with](#integrates-with) for the
 fallback behaviour and how to change it.
 
+### Bootstrap the catalog from your enums
+
+Keep your permission and role names in backed enums and register them in one call — from a
+seeder, a deploy step or a service provider:
+
+```php
+use RoundlyConsulting\Enums\Helpers;
+
+enum PostPermission: string
+{
+    use Helpers;
+
+    case View = 'posts.view';
+    case Edit = 'posts.edit';
+}
+
+$result = Permissions::syncFrom(PostPermission::class);
+$result->created;   // ['posts.edit'] — names registered now
+$result->existing;  // ['posts.view'] — names that were already there
+$result->changed(); // true
+
+Permissions::syncRolesFrom(RoleName::class); // the same, for roles
+```
+
+The sync is **additive**: it never deletes or renames a row the enum does not name, because
+other services may register their own permissions in the same tables. Anything that is not a
+backed enum throws a `PermissionException`.
+
 ### Grant permissions to a role
 
 `givePermissionTo` is **additive** — it never strips grants another caller registered — so
@@ -196,6 +259,9 @@ authoritative (the given set becomes the complete set):
 $role->givePermissionTo('auth.users.view', 'auth.users.edit'); // additive
 $role->syncPermissions(['auth.users.view']);                   // exact set
 $role->revokePermissionTo('auth.users.view');
+
+// The same, through the facade:
+Permissions::for($role)->givePermissionTo('auth.users.view');
 ```
 
 ### Assign roles and read permissions
@@ -204,6 +270,8 @@ $role->revokePermissionTo('auth.users.view');
 $user->assignRole('administrator');
 $user->removeRole('administrator');
 $user->syncRoles(['editor']);
+$user->givePermissionTo('auth.users.view');   // a direct grant
+$user->forgetAllAuthorization();              // every role and direct grant
 
 $user->hasRole('administrator');                 // bool
 $user->hasRole(['administrator', 'editor']);     // any of
@@ -214,23 +282,29 @@ $user->getAllPermissions();     // direct ∪ via-roles, de-duped — the JWT cl
 $user->getAllPermissions()->pluck('name');
 ```
 
+`Permissions::for($holder)` offers the same write verbs — `assignRole`, `removeRole`,
+`syncRoles`, `givePermissionTo`, `revokePermissionTo`, `syncPermissions`,
+`forgetAllAuthorization` — and returns the holder:
+
+```php
+Permissions::for($user)->assignRole('editor');
+Permissions::for($user)->syncPermissions([PostPermission::Edit]);
+```
+
+The scope is a boundary. Role writes refuse a model without `HasRoles` (a `Role` holds
+permissions, never roles), permission writes refuse a model without `HasPermissions`, and
+both refuse a holder that has no key yet — each with a `PermissionException`, before anything
+is written. Unknown names throw `RoleDoesNotExist` / `PermissionDoesNotExist`.
+
 ### Accept your own enums
 
 Every name-taking method accepts a `string` or a `BackedEnum`, so you can pass your own
 permission/role enums (persisted as `->value`):
 
 ```php
-use RoundlyConsulting\Enums\Helpers;
-
-enum Permission: string
-{
-    use Helpers;
-
-    case ViewUsers = 'auth.users.view';
-}
-
-$role->givePermissionTo(Permission::ViewUsers);
-$user->hasPermissionTo(Permission::ViewUsers);
+$role->givePermissionTo(PostPermission::Edit);
+$user->hasPermissionTo(PostPermission::Edit);
+Permissions::exists(PostPermission::Edit);
 ```
 
 ### Gate & middleware
@@ -270,12 +344,7 @@ The permission catalog is cached and auto-invalidates on every grant mutation an
 role/permission save or delete. You rarely need to flush it manually, but you can:
 
 ```php
-use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
-use RoundlyConsulting\Permissions\Facades\Permissions;
-
-app(PermissionRegistrar::class)->forgetCachedPermissions();
-Permissions::forgetCachedPermissions();
-Permissions::permissionExists('auth.users.view');
+Permissions::cache()->forget();
 ```
 
 Or from the CLI:
@@ -287,24 +356,19 @@ php artisan permissions:cache-reset
 **Bulk writes bypass invalidation.** Auto-invalidation is driven by Eloquent model events,
 which mass operations do **not** fire: `Permission::query()->delete()`, `::insert()`,
 `::upsert()`, `DB::table('permissions')->...`, and `truncate()`. After seeding or importing
-permissions that way, invalidate the catalog explicitly:
-
-```bash
-php artisan permissions:cache-reset
-```
-
-```php
-Permissions::forgetCachedPermissions(); // or after your seeder runs
-```
+permissions that way, invalidate the catalog explicitly with `Permissions::cache()->forget()`
+or `php artisan permissions:cache-reset`. (`Permissions::syncFrom()` goes through the models,
+so it needs no flush.)
 
 The short default `cache.ttl` (300s) bounds how long a missed invalidation can linger; use a
 longer TTL only if all writes go through Eloquent.
 
-**Octane & queue workers.** The registrar keeps a small per-request memo on top of the shared
-cache store. The package resets that memo at each Octane request/task/tick and each queued
-job, so a long-lived worker never serves a memo that outlived its authority. For invalidation
-to propagate *across* workers, use a shared cache store (`redis`, `database`, `memcached`) —
-the per-worker `array` store cannot see another worker's `forgetCachedPermissions()`.
+**Octane & queue workers.** The package keeps a small per-request memo on top of the shared
+cache store and resets it at each Octane request/task/tick and each queued job, so a
+long-lived worker never serves a memo that outlived its authority. Call
+`Permissions::cache()->flushMemo()` at any other boundary of a long-lived worker of your own.
+For invalidation to propagate *across* workers, use a shared cache store (`redis`, `database`,
+`memcached`) — the per-worker `array` store cannot see another worker's flush.
 
 ### Cleaning up when a holder is deleted
 
@@ -314,7 +378,7 @@ keys (truncate + reseed, imports, non-autoincrement strategies), a new record in
 id would silently inherit the deleted holder's roles and permissions. Prevent that in one of two
 ways.
 
-Detach grants when the holder is deleted, e.g. from a model `deleting` hook:
+Detach grants when the holder is deleted, e.g. from a model `deleting` (or `deleted`) hook:
 
 ```php
 protected static function booted(): void
@@ -323,12 +387,94 @@ protected static function booted(): void
 }
 ```
 
-Or sweep orphaned rows periodically (e.g. from the scheduler) with the prune command, which
-deletes pivot rows whose `model_type` + `model_id` no longer resolve to a model:
+Or sweep orphaned rows periodically (e.g. from the scheduler), which deletes pivot rows whose
+`model_type` + `model_id` no longer resolve to a model:
+
+```php
+Permissions::pruneOrphans(); // int — rows deleted
+```
 
 ```bash
 php artisan permissions:prune-orphans
 ```
+
+### Without the facade
+
+The facade is sugar over `RoundlyConsulting\Permissions\PermissionsManager` — inject it and
+call the same API:
+
+```php
+use RoundlyConsulting\Permissions\PermissionsManager;
+
+final class OnboardEditor
+{
+    public function __construct(private PermissionsManager $permissions) {}
+
+    public function handle(User $user): void
+    {
+        $this->permissions->for($user)->assignRole($this->permissions->role('editor'));
+    }
+}
+```
+
+Or call the action behind a method directly — each is a small class resolved from the
+container: `FindOrCreateRole`, `FindOrCreatePermission`, `GrantRoles`, `RemoveRoles`,
+`GrantPermissions`, `RevokePermissions`, `ForgetAuthorization`, `SyncFromEnum`, `PruneOrphans`
+(all in `RoundlyConsulting\Permissions\Actions`):
+
+```php
+use RoundlyConsulting\Permissions\Actions\GrantRoles;
+use RoundlyConsulting\Permissions\Actions\SyncFromEnum;
+use RoundlyConsulting\Permissions\Enums\GrantMode;
+
+app(GrantRoles::class)->execute($user, ['editor'], GrantMode::Additive);
+app(SyncFromEnum::class)->execute(PostPermission::class, Permissions::permissionModel());
+```
+
+The static config resolvers on `RoundlyConsulting\Permissions\Support\PermissionRegistrar` —
+`rolesTable()`, `permissionsTable()`, `permissionRoleTable()`, `modelRolesTable()`,
+`modelPermissionsTable()`, `keyType()`, `roleModel()`, `permissionModel()` — are public too:
+the published migrations call them, and so can your own migrations or raw queries.
+
+### Testing with the fake
+
+`Permissions::fake()` swaps in a recording `PermissionsFake`. Everything still runs against
+the database — grants land and the Gate answers — while every write is recorded, whether it
+came through the facade, an injected manager, a `for()` handle, the traits,
+`Role::findOrCreate()` / `Permission::findOrCreate()` or the artisan commands. Names are
+normalized, so an enum matches its string:
+
+```php
+$fake = Permissions::fake();
+
+$user->assignRole('editor');
+Permissions::syncFrom(PostPermission::class);
+
+$fake->assertRoleAssigned($user, RoleName::Editor);
+$fake->assertSyncedFrom(PostPermission::class);
+$fake->assertNoPermissionGranted();
+```
+
+| Assertion | Negative |
+|---|---|
+| `assertRoleRegistered($name)` | `assertNoRoleRegistered()` |
+| `assertPermissionRegistered($name)` | `assertNoPermissionRegistered()` |
+| `assertSyncedFrom($enum)` | `assertNothingSyncedFrom()` |
+| `assertRoleAssigned($holder, ?$role)` | `assertNoRoleAssigned()` |
+| `assertRoleRemoved($holder, ?$role)` | `assertNoRoleRemoved()` |
+| `assertRolesSynced($holder, ?$roles)` — exact set | `assertNoRolesSynced()` |
+| `assertPermissionGranted($holder, ?$permission)` | `assertNoPermissionGranted()` |
+| `assertPermissionRevoked($holder, ?$permission)` | `assertNoPermissionRevoked()` |
+| `assertPermissionsSynced($holder, ?$permissions)` — exact set | `assertNoPermissionsSynced()` |
+| `assertAuthorizationForgotten($holder)` | `assertNoAuthorizationForgotten()` |
+| `assertOrphansPruned()` | `assertNoOrphansPruned()` |
+| `assertCacheForgotten()` | `assertCacheNotForgotten()` |
+| `assertMemoFlushed()` | `assertMemoNotFlushed()` |
+
+A refused write (unknown name, wrong holder) is not recorded. The package's own cache
+housekeeping — the invalidation after every grant, the memo reset per job or request — is not
+recorded either; the cache assertions see only explicit `Permissions::cache()` calls and
+`permissions:cache-reset`.
 
 ## Integrates with
 
