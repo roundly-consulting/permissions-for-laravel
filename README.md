@@ -341,7 +341,11 @@ User::query()->role(['administrator', 'editor'])->get();
 ### Cache
 
 The permission catalog is cached and auto-invalidates on every grant mutation and on any
-role/permission save or delete. You rarely need to flush it manually, but you can:
+role/permission save or delete, once that write commits. Inside a transaction (a seeder, or a
+migration on Postgres) the shared cache is flushed when the outermost transaction commits, so
+a concurrent request can't re-cache the old catalog meanwhile. Until then the writing process
+reads the catalog live, so it sees its own changes, and a rollback leaves nothing cached. You
+rarely need to flush it manually, but you can:
 
 ```php
 Permissions::cache()->forget();
@@ -357,11 +361,13 @@ php artisan permissions:cache-reset
 which mass operations do **not** fire: `Permission::query()->delete()`, `::insert()`,
 `::upsert()`, `DB::table('permissions')->...`, and `truncate()`. After seeding or importing
 permissions that way, invalidate the catalog explicitly with `Permissions::cache()->forget()`
-or `php artisan permissions:cache-reset`. (`Permissions::syncFrom()` goes through the models,
-so it needs no flush.)
+or `php artisan permissions:cache-reset`. Called inside a transaction, `forget()` flushes now and
+again when the transaction commits. (`Permissions::syncFrom()` goes through the models, so it
+needs no flush.)
 
-The short default `cache.ttl` (300s) bounds how long a missed invalidation can linger; use a
-longer TTL only if all writes go through Eloquent.
+The short default `cache.ttl` (300s) bounds how long a missed invalidation can linger — or a
+catalog that a request was already loading at the moment of the commit; use a longer TTL only
+if all writes go through Eloquent.
 
 **Octane & queue workers.** The package keeps a small per-request memo on top of the shared
 cache store and resets it at each Octane request/task/tick and each queued job, so a
