@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\DB;
+use RoundlyConsulting\PackageToolkit\Exceptions\InvalidConfigurationException;
 
 /**
  * Pins the schema the package emits for **every** `permissions.key_type` value.
@@ -76,11 +77,13 @@ it('emits a string holder key for uuid and ulid holders', function (string $keyT
         ->and(createStatement('model_permissions'))->toContain('"model_id" varchar not null');
 })->with(['uuid', 'ulid']);
 
-it('falls back to the bigint column for an unrecognized key type', function (): void {
-    // KeyType::fromConfig never throws — a typo must not break the schema.
-    migrateForKeyType('bigInteger-ish nonsense');
-
-    expect(createStatement('model_roles'))->toContain('"model_id" integer not null');
+it('refuses to migrate on an unrecognized key type instead of falling back to bigint', function (): void {
+    // A typo must stop the migration, never silently build bigint holder keys for a
+    // uuid/ulid-keyed host.
+    expect(fn (): string => migrateForKeyType('bigInteger-ish nonsense'))->toThrow(
+        InvalidConfigurationException::class,
+        'Configuration value [permissions.key_type] must be one of [bigint, uuid, ulid] (case-insensitive), [bigInteger-ish nonsense] given.',
+    );
 });
 
 it('indexes the holder key by [model_id, model_type] and nothing else', function (string $keyType): void {
