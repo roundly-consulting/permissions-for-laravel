@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\DB;
+use RoundlyConsulting\PackageToolkit\Exceptions\InvalidConfigurationException;
 use RoundlyConsulting\Permissions\Models\Permission;
 use RoundlyConsulting\Permissions\Models\Role;
 use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
@@ -86,14 +87,66 @@ it('resolves the role and permission models from config', function (): void {
         ->and(PermissionRegistrar::roleModel())->toBe(CustomRole::class);
 });
 
-it('falls back to defaults for non-string cache config', function (): void {
+it('throws on junk cache config instead of using the defaults (strict config)', function (string $key, mixed $junk, string $message): void {
     Permission::findOrCreate('auth.users.view');
 
-    config()->set('permissions.cache.store', 123);
-    config()->set('permissions.cache.key', ['not', 'a', 'string']);
-    config()->set('permissions.cache.ttl', 'forever');
+    config()->set($key, $junk);
 
-    $registrar = new PermissionRegistrar(app('cache'));
+    expect(fn () => (new PermissionRegistrar(app('cache')))->permissions())
+        ->toThrow(InvalidConfigurationException::class, $message);
+})->with([
+    'store not a string' => ['permissions.cache.store', 123, 'permissions.cache.store'],
+    'store blank' => ['permissions.cache.store', '', 'permissions.cache.store'],
+    'key not a string' => ['permissions.cache.key', ['not', 'a', 'string'], 'permissions.cache.key'],
+    'ttl junk' => ['permissions.cache.ttl', 'forever', 'permissions.cache.ttl'],
+    'ttl float string' => ['permissions.cache.ttl', '1.5', 'permissions.cache.ttl'],
+    'ttl zero' => ['permissions.cache.ttl', 0, 'permissions.cache.ttl'],
+]);
 
-    expect($registrar->permissions()->pluck('name')->all())->toBe(['auth.users.view']);
+it('reads env-string ttls and defaults absent cache config (strict config)', function (): void {
+    config()->set('permissions.cache.ttl', '600');
+    expect(PermissionRegistrar::cacheTtl())->toBe(600);
+
+    config()->set('permissions.cache.ttl', null);
+    config()->set('permissions.cache.store', null);
+    config()->set('permissions.cache.key', null);
+
+    expect(PermissionRegistrar::cacheTtl())->toBe(300)
+        ->and(PermissionRegistrar::cacheStoreName())->toBeNull()
+        ->and(PermissionRegistrar::cacheKey())->toBe('permissions.cache');
+
+    config()->set('permissions.cache.store', 'redis');
+    expect(PermissionRegistrar::cacheStoreName())->toBe('redis');
+});
+
+it('throws on a blank or non-string table name (strict config)', function (mixed $junk): void {
+    config()->set('permissions.table_names.roles', $junk);
+
+    PermissionRegistrar::rolesTable();
+})->with([
+    'blank' => [''],
+    'array' => [['roles']],
+    'int' => [1],
+])->throws(InvalidConfigurationException::class, 'permissions.table_names.roles');
+
+it('uses the default table name only when the key is absent (strict config)', function (): void {
+    config()->set('permissions.table_names.roles', null);
+
+    expect(PermissionRegistrar::rolesTable())->toBe('roles');
+});
+
+it('hands the raw cache ttl env string to the strict reader (strict config)', function (): void {
+    $_SERVER['PERMISSIONS_CACHE_TTL'] = 'five';
+
+    try {
+        /** @var array{cache: array{ttl: mixed}} $config */
+        $config = require __DIR__.'/../../../config/permissions.php';
+    } finally {
+        unset($_SERVER['PERMISSIONS_CACHE_TTL']);
+    }
+
+    config()->set('permissions.cache.ttl', $config['cache']['ttl']);
+
+    expect($config['cache']['ttl'])->toBe('five')
+        ->and(fn (): int => PermissionRegistrar::cacheTtl())->toThrow(InvalidConfigurationException::class, 'permissions.cache.ttl');
 });

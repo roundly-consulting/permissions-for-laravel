@@ -81,10 +81,6 @@ final class PermissionsServiceProvider extends PackageServiceProvider
             ARRAY_FILTER_USE_BOTH,
         ));
 
-        $store = config('permissions.cache.store');
-        $key = config('permissions.cache.key');
-        $ttl = config('permissions.cache.ttl', 300);
-
         return [
             'Role model' => class_basename(PermissionRegistrar::roleModel()),
             'Permission model' => class_basename(PermissionRegistrar::permissionModel()),
@@ -94,9 +90,9 @@ final class PermissionsServiceProvider extends PackageServiceProvider
             'Gate check' => Config::boolean('permissions.register_gate_check', true) ? 'ON' : 'OFF',
             'Catalog cache' => sprintf(
                 'store %s, key %s, ttl %ds',
-                $store === 'default' || ! is_string($store) ? 'DEFAULT' : 'SET',
-                $key === 'permissions.cache' || ! is_string($key) ? 'DEFAULT' : 'SET',
-                is_int($ttl) ? $ttl : 300,
+                PermissionRegistrar::cacheStoreName() === null ? 'DEFAULT' : 'SET',
+                PermissionRegistrar::cacheKey() === 'permissions.cache' ? 'DEFAULT' : 'SET',
+                PermissionRegistrar::cacheTtl(),
             ),
         ];
     }

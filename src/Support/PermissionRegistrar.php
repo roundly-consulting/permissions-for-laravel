@@ -11,6 +11,8 @@ use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Database\Connection;
 use Illuminate\Database\Eloquent\Collection;
 use RoundlyConsulting\PackageToolkit\Enums\KeyType;
+use RoundlyConsulting\PackageToolkit\Exceptions\InvalidConfigurationException;
+use RoundlyConsulting\PackageToolkit\Support\Config;
 use RoundlyConsulting\Permissions\Models\Permission;
 use RoundlyConsulting\Permissions\Models\Role;
 use RoundlyConsulting\Permissions\PermissionsManager;
@@ -328,31 +330,31 @@ final class PermissionRegistrar
     /** The `table_names.roles` table. */
     public static function rolesTable(): string
     {
-        return self::tableName('permissions.table_names.roles', 'roles');
+        return self::string('permissions.table_names.roles', config('permissions.table_names.roles'), 'roles');
     }
 
     /** The `table_names.permissions` table. */
     public static function permissionsTable(): string
     {
-        return self::tableName('permissions.table_names.permissions', 'permissions');
+        return self::string('permissions.table_names.permissions', config('permissions.table_names.permissions'), 'permissions');
     }
 
     /** The `table_names.permission_role` role↔permission pivot. */
     public static function permissionRoleTable(): string
     {
-        return self::tableName('permissions.table_names.permission_role', 'permission_role');
+        return self::string('permissions.table_names.permission_role', config('permissions.table_names.permission_role'), 'permission_role');
     }
 
     /** The `table_names.model_roles` holder↔role morph pivot. */
     public static function modelRolesTable(): string
     {
-        return self::tableName('permissions.table_names.model_roles', 'model_roles');
+        return self::string('permissions.table_names.model_roles', config('permissions.table_names.model_roles'), 'model_roles');
     }
 
     /** The `table_names.model_permissions` holder↔permission morph pivot. */
     public static function modelPermissionsTable(): string
     {
-        return self::tableName('permissions.table_names.model_permissions', 'model_permissions');
+        return self::string('permissions.table_names.model_permissions', config('permissions.table_names.model_permissions'), 'model_permissions');
     }
 
     /**
@@ -366,32 +368,57 @@ final class PermissionRegistrar
         return KeyType::fromConfig('permissions.key_type');
     }
 
-    private static function tableName(string $key, string $default): string
+    /**
+     * The catalog cache's lifetime in seconds: an int or a canonical integer string
+     * (an env value), at least 1. Absent reads as 300; `'forever'` or `0` throws
+     * rather than silently caching for 0 seconds or the default.
+     *
+     * @throws InvalidConfigurationException
+     */
+    public static function cacheTtl(): int
     {
-        $name = config($key, $default);
+        return Config::integer('permissions.cache.ttl', 300, min: 1);
+    }
 
-        return is_string($name) ? $name : $default;
+    /**
+     * The catalog cache store name, or null for the app's default store (`default`).
+     *
+     * @throws InvalidConfigurationException when present but blank or not a string
+     */
+    public static function cacheStoreName(): ?string
+    {
+        $store = self::string('permissions.cache.store', config('permissions.cache.store'), 'default');
+
+        return $store === 'default' ? null : $store;
+    }
+
+    /**
+     * @throws InvalidConfigurationException when present but blank or not a string
+     */
+    public static function cacheKey(): string
+    {
+        return self::string('permissions.cache.key', config('permissions.cache.key'), 'permissions.cache');
     }
 
     private function cacheStore(): CacheRepository
     {
-        $store = config('permissions.cache.store');
-        $store = ($store === 'default' || ! is_string($store)) ? null : $store;
-
-        return $this->cache->store($store);
+        return $this->cache->store(self::cacheStoreName());
     }
 
-    private static function cacheKey(): string
+    /**
+     * A string setting: `$default` only when absent (null); a blank or non-string
+     * value throws instead of silently reading as the default.
+     *
+     * @throws InvalidConfigurationException
+     */
+    private static function string(string $key, mixed $value, string $default): string
     {
-        $key = config('permissions.cache.key', 'permissions.cache');
+        $value ??= $default;
 
-        return is_string($key) ? $key : 'permissions.cache';
-    }
+        if (! is_string($value) || trim($value) === '') {
+            throw InvalidConfigurationException::notAString($key, $value);
+        }
 
-    private static function cacheTtl(): int
-    {
-        $ttl = config('permissions.cache.ttl', 300);
-
-        return is_int($ttl) ? $ttl : 300;
+        return $value;
     }
 }

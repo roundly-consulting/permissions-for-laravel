@@ -123,7 +123,7 @@ return [
     'cache' => [
         'store' => env('PERMISSIONS_CACHE_STORE', 'default'),
         'key' => 'permissions.cache',
-        'ttl' => (int) env('PERMISSIONS_CACHE_TTL', 300), // seconds
+        'ttl' => env('PERMISSIONS_CACHE_TTL', 300), // seconds (at least 1)
     ],
 
 ];
