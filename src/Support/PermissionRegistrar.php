@@ -358,8 +358,8 @@ final class PermissionRegistrar
     /**
      * The key type of the models that hold roles/permissions (drives `model_id`).
      *
-     * Misconfiguration never throws — an unrecognized value silently falls back to
-     * the safe `bigint` default, which is what the schema has always emitted.
+     * Absent or null reads as `bigint`; an unrecognized value throws the toolkit's
+     * `InvalidConfigurationException` rather than silently building bigint keys.
      */
     public static function keyType(): KeyType
     {
