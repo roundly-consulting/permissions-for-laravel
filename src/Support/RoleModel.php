@@ -11,10 +11,9 @@ use RoundlyConsulting\Permissions\Models\Role;
 /**
  * The single resolution point for the model configured at `permissions.models.role`.
  *
- * Wraps the toolkit's {@see ModelResolver} (which validates the configured value is a
- * real Eloquent model) and narrows the result to this package's own base class — the
- * package calls `Role`'s own API (`permissions()`, `name`, the grant traits), so a real
- * model that is not a `Role` falls back to the packaged one rather than fataling later.
+ * Absent config resolves the packaged model; anything else must be that model or a subclass of
+ * it, or the toolkit's ModelResolver throws InvalidConfigurationException naming the key — a
+ * foreign class is never silently replaced.
  *
  * @internal Host code uses `Permissions::roleModel()`, `Permissions::roles()` and friends.
  */
@@ -23,9 +22,7 @@ final class RoleModel
     /** @return class-string<Role> */
     public static function class(): string
     {
-        $model = ModelResolver::for('permissions.models.role', Role::class);
-
-        return is_a($model, Role::class, true) ? $model : Role::class;
+        return ModelResolver::for('permissions.models.role', Role::class);
     }
 
     public static function new(): Role

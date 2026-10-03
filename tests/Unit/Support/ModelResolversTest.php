@@ -31,14 +31,19 @@ it('honours a configured host subclass', function (): void {
         ->and(PermissionModel::query()->getModel())->toBeInstanceOf(CustomPermission::class);
 });
 
-it('falls back to the packaged model for a real model that is not ours', function (): void {
-    // The toolkit resolver only validates "is a Model" — the package must narrow
-    // to its own base class, because it calls Role/Permission's own API.
+it('refuses a foreign model instead of falling back to the packaged one', function (): void {
+    // The toolkit refuses any class that is not the packaged model or a subclass of it.
     config()->set('permissions.models.role', NotAPermission::class);
     config()->set('permissions.models.permission', NotAPermission::class);
 
-    expect(RoleModel::class())->toBe(Role::class)
-        ->and(PermissionModel::class())->toBe(Permission::class);
+    expect(fn (): string => RoleModel::class())->toThrow(
+        InvalidConfigurationException::class,
+        'Configuration value [permissions.models.role] must be a class-string of ['.Role::class.'], ['.NotAPermission::class.'] given.',
+    );
+    expect(fn (): string => PermissionModel::class())->toThrow(
+        InvalidConfigurationException::class,
+        'Configuration value [permissions.models.permission] must be a class-string of ['.Permission::class.'], ['.NotAPermission::class.'] given.',
+    );
 });
 
 it('throws when the configured role model is not a model class', function (): void {
