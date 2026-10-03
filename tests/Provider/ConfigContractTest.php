@@ -23,13 +23,6 @@ it('ships exactly the config keys it reads', function (): void {
     expect(__DIR__.'/../../config/permissions.php')->toSatisfyConfigContract(
         [__DIR__.'/../../src', __DIR__.'/../../database'],
         [
-            // The model seam (`permissions.models.role` / `.permission`) is read through
-            // the RoleModel/PermissionModel resolvers rather than a bare `config()` token,
-            // and the table names through PermissionRegistrar. Those are real reads that
-            // drive the whole schema and every query, but they are not `config(` calls, so
-            // the prefix is what makes them visible to the scraper.
-            'extraReadPrefixes' => ['permissions.'],
-
             // Deliberately NO `excludeFromReverse` for the service provider. It renders an
             // `about` section (a render is not a read), but the toolkit's
             // PackageServiceProvider ALSO does its real `bindFromConfig()` reads in the
