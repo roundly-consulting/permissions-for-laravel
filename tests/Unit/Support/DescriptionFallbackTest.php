@@ -22,12 +22,17 @@ it('parses a plain string config value into a FallbackMode', function (string $v
     ['any', FallbackMode::Any],
 ]);
 
-it('refuses an unrecognized value instead of reading it as Fallback (strict config)', function (mixed $value): void {
+it('refuses an unrecognized value instead of reading it as Fallback (strict config)', function (mixed $value, string $given): void {
     config()->set('permissions.description_fallback', $value);
 
     expect(fn (): FallbackMode => DescriptionFallback::fromConfig())
-        ->toThrow(InvalidConfigurationException::class, 'Configuration value [permissions.description_fallback] must be one of [none, fallback, any].');
-})->with(['nonsense', 'Any', '', 1]);
+        ->toThrow(InvalidConfigurationException::class, "Configuration value [permissions.description_fallback] must be one of [none, fallback, any], [{$given}] given.");
+})->with([
+    ['nonsense', 'nonsense'],
+    ['Any', 'Any'],
+    ['', "''"],
+    [1, '1'],
+]);
 
 it('reads an unset value as the non-disclosing Fallback mode', function (): void {
     config()->set('permissions.description_fallback', null);
