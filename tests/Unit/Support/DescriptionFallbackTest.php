@@ -30,15 +30,14 @@ it('refuses an unrecognized value instead of reading it as Fallback (strict conf
 })->with([
     ['nonsense', 'nonsense'],
     ['Any', 'Any'],
-    ['', "''"],
     [1, '1'],
 ]);
 
-it('reads an unset value as the non-disclosing Fallback mode', function (): void {
-    config()->set('permissions.description_fallback', null);
+it('reads an unset or blank value as the non-disclosing Fallback mode', function (mixed $unset): void {
+    config()->set('permissions.description_fallback', $unset);
 
     expect(DescriptionFallback::fromConfig())->toBe(FallbackMode::Fallback);
-});
+})->with(['null' => [null], 'blank' => [''], 'whitespace' => ['  ']]);
 
 it('hands the raw env string to the strict reader (strict config)', function (): void {
     $_SERVER['PERMISSIONS_DESCRIPTION_FALLBACK'] = 'anyy';

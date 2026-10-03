@@ -96,7 +96,6 @@ it('throws on junk cache config instead of using the defaults (strict config)', 
         ->toThrow(InvalidConfigurationException::class, $message);
 })->with([
     'store not a string' => ['permissions.cache.store', 123, 'permissions.cache.store'],
-    'store blank' => ['permissions.cache.store', '', 'permissions.cache.store'],
     'key not a string' => ['permissions.cache.key', ['not', 'a', 'string'], 'permissions.cache.key'],
     'ttl junk' => ['permissions.cache.ttl', 'forever', 'permissions.cache.ttl'],
     'ttl float string' => ['permissions.cache.ttl', '1.5', 'permissions.cache.ttl'],
@@ -119,21 +118,30 @@ it('reads env-string ttls and defaults absent cache config (strict config)', fun
     expect(PermissionRegistrar::cacheStoreName())->toBe('redis');
 });
 
-it('throws on a blank or non-string table name (strict config)', function (mixed $junk): void {
+it('reads blank cache config as not set, so the defaults apply (strict config)', function (string $blank): void {
+    config()->set('permissions.cache.ttl', $blank);
+    config()->set('permissions.cache.store', $blank);
+    config()->set('permissions.cache.key', $blank);
+
+    expect(PermissionRegistrar::cacheTtl())->toBe(300)
+        ->and(PermissionRegistrar::cacheStoreName())->toBeNull()
+        ->and(PermissionRegistrar::cacheKey())->toBe('permissions.cache');
+})->with(['empty' => [''], 'whitespace' => ['  ']]);
+
+it('throws on a non-string table name (strict config)', function (mixed $junk): void {
     config()->set('permissions.table_names.roles', $junk);
 
     PermissionRegistrar::rolesTable();
 })->with([
-    'blank' => [''],
     'array' => [['roles']],
     'int' => [1],
 ])->throws(InvalidConfigurationException::class, 'permissions.table_names.roles');
 
-it('uses the default table name only when the key is absent (strict config)', function (): void {
-    config()->set('permissions.table_names.roles', null);
+it('uses the default table name when the key is not set (strict config)', function (mixed $unset): void {
+    config()->set('permissions.table_names.roles', $unset);
 
     expect(PermissionRegistrar::rolesTable())->toBe('roles');
-});
+})->with(['null' => [null], 'blank' => [''], 'whitespace' => ['  ']]);
 
 it('hands the raw cache ttl env string to the strict reader (strict config)', function (): void {
     $_SERVER['PERMISSIONS_CACHE_TTL'] = 'five';

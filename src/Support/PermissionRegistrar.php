@@ -360,7 +360,7 @@ final class PermissionRegistrar
     /**
      * The key type of the models that hold roles/permissions (drives `model_id`).
      *
-     * Absent or null reads as `bigint`; an unrecognized value throws the toolkit's
+     * Not set (absent, null or blank) reads as `bigint`; an unrecognized value throws the toolkit's
      * `InvalidConfigurationException` rather than silently building bigint keys.
      */
     public static function keyType(): KeyType
@@ -370,7 +370,7 @@ final class PermissionRegistrar
 
     /**
      * The catalog cache's lifetime in seconds: an int or a canonical integer string
-     * (an env value), at least 1. Absent reads as 300; `'forever'` or `0` throws
+     * (an env value), at least 1. Not set (absent, null or blank) reads as 300; `'forever'` or `0` throws
      * rather than silently caching for 0 seconds or the default.
      *
      * @throws InvalidConfigurationException
@@ -381,9 +381,10 @@ final class PermissionRegistrar
     }
 
     /**
-     * The catalog cache store name, or null for the app's default store (`default`).
+     * The catalog cache store name, or null for the app's default store (`default`, or
+     * not set — absent, null or blank).
      *
-     * @throws InvalidConfigurationException when present but blank or not a string
+     * @throws InvalidConfigurationException when present but not a string
      */
     public static function cacheStoreName(): ?string
     {
@@ -393,7 +394,7 @@ final class PermissionRegistrar
     }
 
     /**
-     * @throws InvalidConfigurationException when present but blank or not a string
+     * @throws InvalidConfigurationException when present but not a string
      */
     public static function cacheKey(): string
     {
@@ -406,16 +407,19 @@ final class PermissionRegistrar
     }
 
     /**
-     * A string setting: `$default` only when absent (null); a blank or non-string
-     * value throws instead of silently reading as the default.
+     * A string setting: `$default` when not set — absent, null or blank (`''` or
+     * whitespace, what a host's `KEY=` gives); a non-string value throws instead of
+     * silently reading as the default.
      *
      * @throws InvalidConfigurationException
      */
     private static function string(string $key, mixed $value, string $default): string
     {
-        $value ??= $default;
+        if ($value === null || (is_string($value) && trim($value) === '')) {
+            return $default;
+        }
 
-        if (! is_string($value) || trim($value) === '') {
+        if (! is_string($value)) {
             throw InvalidConfigurationException::notAString($key, $value);
         }
 

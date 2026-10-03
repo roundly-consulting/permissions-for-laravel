@@ -20,17 +20,14 @@ use RoundlyConsulting\Translatable\Enums\FallbackMode;
 final class DescriptionFallback
 {
     /**
-     * Unset reads as `Fallback`; a case or its string value is taken as-is; anything
-     * else throws rather than silently reading as the default.
+     * Not set (absent, null or blank — a host's `KEY=`) reads as `Fallback`; a case or
+     * its string value is taken as-is; anything else throws rather than silently
+     * reading as the default.
      *
      * @throws InvalidConfigurationException
      */
     public static function fromConfig(): FallbackMode
     {
-        if (config('permissions.description_fallback') === null) {
-            return FallbackMode::Fallback;
-        }
-
-        return Config::enum('permissions.description_fallback', FallbackMode::class);
+        return Config::enum('permissions.description_fallback', FallbackMode::class, FallbackMode::Fallback);
     }
 }
