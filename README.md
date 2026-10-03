@@ -89,9 +89,7 @@ return [
 
     'register_gate_check' => true,
 
-    'description_fallback' => RoundlyConsulting\Translatable\Enums\FallbackMode::tryFrom(
-        (string) env('PERMISSIONS_DESCRIPTION_FALLBACK', 'fallback')
-    ) ?? RoundlyConsulting\Translatable\Enums\FallbackMode::Fallback,
+    'description_fallback' => env('PERMISSIONS_DESCRIPTION_FALLBACK', RoundlyConsulting\Translatable\Enums\FallbackMode::Fallback),
 
     'cache' => [
         'store' => env('PERMISSIONS_CACHE_STORE', 'default'),
@@ -106,9 +104,9 @@ return [
 | `models.role` | `class-string` | `Role::class` | Role model; swap for a subclass to extend it. |
 | `models.permission` | `class-string` | `Permission::class` | Permission model; swap for a subclass. |
 | `table_names.*` | `string` | see above | Table names (column names are fixed). Set before you migrate. |
-| `key_type` | `string` | `bigint` (`PERMISSIONS_KEY_TYPE`) | Key type of the holder models — `bigint`, `uuid`, or `ulid`. Drives the `model_id` column on the junction tables. **Set before you migrate** (the schema freezes at release). An unrecognized value falls back to `bigint`. |
-| `register_gate_check` | `bool` | `true` | Register the `Gate::before` hook so `can:<permission>` resolves. |
-| `description_fallback` | `FallbackMode` | `Fallback` (`PERMISSIONS_DESCRIPTION_FALLBACK`) | How the translatable `description` falls back when the current locale is missing — see [Integrates with](#integrates-with). |
+| `key_type` | `string` | `bigint` (`PERMISSIONS_KEY_TYPE`) | Key type of the holder models — `bigint`, `uuid`, or `ulid`. Drives the `model_id` column on the junction tables. **Set before you migrate** (the schema freezes at release). Unset reads as `bigint`; any other value throws `InvalidConfigurationException`. |
+| `register_gate_check` | `bool` | `true` | Register the `Gate::before` hook so `can:<permission>` resolves. Accepts `true`/`false`, `1`/`0`, `on`/`off`, `yes`/`no`; anything else throws `InvalidConfigurationException` at boot. |
+| `description_fallback` | `FallbackMode` | `Fallback` (`PERMISSIONS_DESCRIPTION_FALLBACK`) | How the translatable `description` falls back when the current locale is missing — see [Integrates with](#integrates-with). A case or its string value (`fallback`, `none`, `any`); an unknown value throws `InvalidConfigurationException` instead of reading as `Fallback`. |
 | `cache.store` | `string` | `default` (`PERMISSIONS_CACHE_STORE`) | Cache store for the permission catalog; `default` uses the app store. |
 | `cache.key` | `string` | `permissions.cache` | Cache key for the catalog. |
 | `cache.ttl` | `int` | `300` (`PERMISSIONS_CACHE_TTL`) | Catalog cache TTL in seconds (short by default as defense-in-depth against bulk writes — see [Cache](#cache)). |

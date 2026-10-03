@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\ServiceProvider;
+use RoundlyConsulting\PackageToolkit\Exceptions\InvalidConfigurationException;
 use RoundlyConsulting\Permissions\Commands\CacheResetCommand;
 use RoundlyConsulting\Permissions\Commands\PruneOrphansCommand;
 use RoundlyConsulting\Permissions\PermissionsServiceProvider;
@@ -120,4 +121,40 @@ it('never renders host topology or a swapped model namespace in about', function
             '1 renamed',
         ],
     );
+});
+
+/**
+ * Regression (strict config sweep): the boot hook read `register_gate_check` by
+ * truthiness and the about row by `=== false`, so a `0` skipped the hook while about
+ * still reported ON, and a typo such as `'disabled'` silently kept the hook on.
+ */
+it('reports the gate check the way the boot hook reads it', function (mixed $value, string $shown): void {
+    config()->set('permissions.register_gate_check', $value);
+
+    Artisan::call('about', ['--only' => 'permissions']);
+
+    expect(Artisan::output())->toMatch("/Gate check\\s*\\.*\\s*{$shown}/");
+})->with([
+    [true, 'ON'],
+    ['on', 'ON'],
+    [false, 'OFF'],
+    [0, 'OFF'],
+    ['off', 'OFF'],
+    [null, 'ON'],
+]);
+
+it('refuses a typo in the gate check switch at boot (strict config)', function (): void {
+    config()->set('permissions.register_gate_check', 'disabled');
+
+    $provider = new PermissionsServiceProvider($this->app);
+
+    expect(fn () => (fn () => $this->registerGateCheck())->call($provider))
+        ->toThrow(InvalidConfigurationException::class, 'Configuration value [permissions.register_gate_check] must be a boolean (true/false, 1/0, on/off or yes/no), [disabled] given.');
+});
+
+it('refuses a typo in the gate check switch in about (strict config)', function (): void {
+    config()->set('permissions.register_gate_check', 'disabled');
+
+    expect(fn () => Artisan::call('about', ['--only' => 'permissions']))
+        ->toThrow(InvalidConfigurationException::class, '[permissions.register_gate_check]');
 });

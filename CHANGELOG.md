@@ -61,3 +61,6 @@ Initial public release.
   pivot, instead of a raw database `QueryException`; role writes on a model without `HasRoles`
   (including `Permissions::for($role)`) and permission writes on a model without
   `HasPermissions` are refused the same way.
+- `register_gate_check` and `description_fallback` are read strictly: a typo throws
+  `InvalidConfigurationException` naming the key instead of quietly keeping the gate hook on or
+  reading as `Fallback`, and the `about` row now reports the gate check exactly as boot reads it.

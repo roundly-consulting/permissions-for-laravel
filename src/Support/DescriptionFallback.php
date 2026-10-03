@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\Permissions\Support;
 
+use RoundlyConsulting\PackageToolkit\Exceptions\InvalidConfigurationException;
+use RoundlyConsulting\PackageToolkit\Support\Config;
 use RoundlyConsulting\Translatable\Enums\FallbackMode;
 
 /**
@@ -17,14 +19,18 @@ use RoundlyConsulting\Translatable\Enums\FallbackMode;
  */
 final class DescriptionFallback
 {
+    /**
+     * Unset reads as `Fallback`; a case or its string value is taken as-is; anything
+     * else throws rather than silently reading as the default.
+     *
+     * @throws InvalidConfigurationException
+     */
     public static function fromConfig(): FallbackMode
     {
-        $configured = config('permissions.description_fallback');
-
-        if ($configured instanceof FallbackMode) {
-            return $configured;
+        if (config('permissions.description_fallback') === null) {
+            return FallbackMode::Fallback;
         }
 
-        return FallbackMode::tryFrom((string) $configured) ?? FallbackMode::Fallback;
+        return Config::enum('permissions.description_fallback', FallbackMode::class);
     }
 }

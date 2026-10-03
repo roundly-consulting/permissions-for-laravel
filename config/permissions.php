@@ -50,7 +50,8 @@ return [
     | drives the `model_id` column on the junction tables. Use "uuid" or "ulid"
     | when your holders use HasUuids / HasUlids. Set this before you publish and
     | run the migrations — the schema freezes once released. Supported: bigint,
-    | uuid, ulid. An unrecognized value falls back to bigint.
+    | uuid, ulid (unset reads as bigint). Any other value throws
+    | InvalidConfigurationException rather than silently building bigint keys.
     |
     */
 
@@ -63,6 +64,7 @@ return [
     |
     | Register the `Gate::before` permission check so `can:<permission>` route
     | middleware and `$user->can('<permission>')` resolve against permissions.
+    | A boolean (true/false, 1/0, on/off, yes/no); anything else throws.
     |
     */
 
@@ -92,11 +94,13 @@ return [
     | unrelated locale is a surprise. Override per model with a
     | `protected ?FallbackMode $translatableFallbackMode` property.
     |
+    | A FallbackMode case or its string value (`fallback`, `none`, `any`); any
+    | other value throws InvalidConfigurationException rather than silently
+    | reading as Fallback.
+    |
     */
 
-    'description_fallback' => FallbackMode::tryFrom(
-        (string) env('PERMISSIONS_DESCRIPTION_FALLBACK', 'fallback')
-    ) ?? FallbackMode::Fallback,
+    'description_fallback' => env('PERMISSIONS_DESCRIPTION_FALLBACK', FallbackMode::Fallback),
 
     /*
     |--------------------------------------------------------------------------

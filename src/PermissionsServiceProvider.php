@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Gate;
 use RoundlyConsulting\PackageToolkit\Concerns\RegistersBlueprintMacros;
 use RoundlyConsulting\PackageToolkit\Package;
 use RoundlyConsulting\PackageToolkit\PackageServiceProvider;
+use RoundlyConsulting\PackageToolkit\Support\Config;
 use RoundlyConsulting\Permissions\Commands\CacheResetCommand;
 use RoundlyConsulting\Permissions\Commands\PruneOrphansCommand;
 use RoundlyConsulting\Permissions\Support\DescriptionFallback;
@@ -90,7 +91,7 @@ final class PermissionsServiceProvider extends PackageServiceProvider
             'Holder key type' => PermissionRegistrar::keyType()->value,
             'Description fallback' => DescriptionFallback::fromConfig()->value,
             'Tables' => $renamed === 0 ? 'DEFAULT' : $renamed.' renamed',
-            'Gate check' => config('permissions.register_gate_check', true) === false ? 'OFF' : 'ON',
+            'Gate check' => Config::boolean('permissions.register_gate_check', true) ? 'ON' : 'OFF',
             'Catalog cache' => sprintf(
                 'store %s, key %s, ttl %ds',
                 $store === 'default' || ! is_string($store) ? 'DEFAULT' : 'SET',
@@ -149,7 +150,7 @@ final class PermissionsServiceProvider extends PackageServiceProvider
      */
     private function registerGateCheck(): void
     {
-        if (! config('permissions.register_gate_check', true)) {
+        if (! Config::boolean('permissions.register_gate_check', true)) {
             return;
         }
 

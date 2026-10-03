@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use RoundlyConsulting\PackageToolkit\Exceptions\InvalidConfigurationException;
 use RoundlyConsulting\Permissions\Support\DescriptionFallback;
 use RoundlyConsulting\Translatable\Enums\FallbackMode;
 
@@ -21,8 +22,46 @@ it('parses a plain string config value into a FallbackMode', function (string $v
     ['any', FallbackMode::Any],
 ]);
 
-it('falls back to the non-disclosing Fallback mode for an unrecognized value', function (): void {
-    config()->set('permissions.description_fallback', 'nonsense');
+it('refuses an unrecognized value instead of reading it as Fallback (strict config)', function (mixed $value): void {
+    config()->set('permissions.description_fallback', $value);
+
+    expect(fn (): FallbackMode => DescriptionFallback::fromConfig())
+        ->toThrow(InvalidConfigurationException::class, 'Configuration value [permissions.description_fallback] must be one of [none, fallback, any].');
+})->with(['nonsense', 'Any', '', 1]);
+
+it('reads an unset value as the non-disclosing Fallback mode', function (): void {
+    config()->set('permissions.description_fallback', null);
 
     expect(DescriptionFallback::fromConfig())->toBe(FallbackMode::Fallback);
+});
+
+it('hands the raw env string to the strict reader (strict config)', function (): void {
+    $_SERVER['PERMISSIONS_DESCRIPTION_FALLBACK'] = 'anyy';
+
+    try {
+        /** @var array{description_fallback: mixed} $config */
+        $config = require __DIR__.'/../../../config/permissions.php';
+    } finally {
+        unset($_SERVER['PERMISSIONS_DESCRIPTION_FALLBACK']);
+    }
+
+    config()->set('permissions.description_fallback', $config['description_fallback']);
+
+    expect($config['description_fallback'])->toBe('anyy')
+        ->and(fn (): FallbackMode => DescriptionFallback::fromConfig())->toThrow(InvalidConfigurationException::class);
+});
+
+it('reads a valid env string from the shipped config', function (): void {
+    $_SERVER['PERMISSIONS_DESCRIPTION_FALLBACK'] = 'any';
+
+    try {
+        /** @var array{description_fallback: mixed} $config */
+        $config = require __DIR__.'/../../../config/permissions.php';
+    } finally {
+        unset($_SERVER['PERMISSIONS_DESCRIPTION_FALLBACK']);
+    }
+
+    config()->set('permissions.description_fallback', $config['description_fallback']);
+
+    expect(DescriptionFallback::fromConfig())->toBe(FallbackMode::Any);
 });
