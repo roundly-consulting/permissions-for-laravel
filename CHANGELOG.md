@@ -6,6 +6,11 @@ All notable changes to `permissions-for-laravel` are documented in this file. Th
 
 ## Unreleased
 
+### Changed
+
+- Maintenance: requires the latest roundly packages — package-toolkit `^1.3.0`, enums `^1.1.0`,
+  translatable `^1.1.0`; dev: testing `^1.2.1`.
+
 ## 1.0.0 - 2026-10-03
 
 Initial public release.
