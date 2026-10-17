@@ -49,6 +49,15 @@ abstract class TestCase extends PackageTestCase
     }
 
     /**
+     * Migrate once per worker and reset only the data between tests. The migrations read
+     * config alone (table names, key type), which the schema signature already covers.
+     */
+    protected function keepsMigratedSchema(): bool
+    {
+        return true;
+    }
+
+    /**
      * Applied BEFORE the providers boot.
      *
      * @return array<string, mixed>
