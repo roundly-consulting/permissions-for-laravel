@@ -61,6 +61,9 @@ ArchPresets::modelsResolveThroughSeam(__DIR__.'/../src', 'Support', [
     'permissions.models.permission',
 ]);
 
+// A host swap reaches the packaged factories too: each one builds the configured model.
+ArchPresets::factoriesResolveThroughSeam(__DIR__.'/../database/factories', __DIR__.'/../src', 'Support');
+
 /**
  * The morph-key seam, guarded. Permissions emits no raw morph — its `model_roles`/
  * `model_permissions` pivots build the owner column by hand from a `model_type` string plus
