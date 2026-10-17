@@ -92,3 +92,20 @@ it('authorizes through the gate right after a swapped-model permission is create
 
     expect($user->can('posts.publish'))->toBeTrue();
 });
+
+/**
+ * The factories named the packaged models, so `Role::factory()` / `Permission::factory()` built
+ * the packaged classes after a host swapped them: the host's model events — and the registrar's
+ * cache invalidation on them — never ran.
+ */
+it('builds the configured models from the packaged factories', function (): void {
+    CustomRole::resetCreationCount();
+    CustomPermission::resetCreationCount();
+
+    expect(Role::factory()->create()::class)->toBe(CustomRole::class)
+        ->and(CustomRole::factory()->create()::class)->toBe(CustomRole::class)
+        ->and(Permission::factory()->create()::class)->toBe(CustomPermission::class)
+        ->and(CustomPermission::factory()->create()::class)->toBe(CustomPermission::class)
+        ->and(CustomRole::creationCount())->toBe(2)
+        ->and(CustomPermission::creationCount())->toBe(2);
+});
