@@ -25,7 +25,7 @@ roles), and let Laravel's Gate and `can:` middleware authorize against them.
 
 ## Installation
 
-Requires PHP 8.4 and Laravel 12 or 13.
+Requires PHP 8.4 and Laravel 13.
 
 ```bash
 composer require roundly-consulting/permissions-for-laravel
