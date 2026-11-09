@@ -1,0 +1,480 @@
+[
+    {
+        "sql": "select \"name\" from \"permissions\" where \"name\" in (?, ?)",
+        "bindings": [
+            "auth.users.view",
+            "auth.users.edit"
+        ]
+    },
+    {
+        "sql": "insert into \"permissions\" (\"name\", \"updated_at\", \"created_at\") values (?, ?, ?) returning \"id\"",
+        "bindings": [
+            "auth.users.view",
+            "<timestamp>",
+            "<timestamp>"
+        ]
+    },
+    {
+        "sql": "insert into \"permissions\" (\"name\", \"updated_at\", \"created_at\") values (?, ?, ?) returning \"id\"",
+        "bindings": [
+            "auth.users.edit",
+            "<timestamp>",
+            "<timestamp>"
+        ]
+    },
+    {
+        "sql": "select \"name\" from \"roles\" where \"name\" in (?, ?)",
+        "bindings": [
+            "administrator",
+            "editor"
+        ]
+    },
+    {
+        "sql": "insert into \"roles\" (\"name\", \"updated_at\", \"created_at\") values (?, ?, ?) returning \"id\"",
+        "bindings": [
+            "administrator",
+            "<timestamp>",
+            "<timestamp>"
+        ]
+    },
+    {
+        "sql": "insert into \"roles\" (\"name\", \"updated_at\", \"created_at\") values (?, ?, ?) returning \"id\"",
+        "bindings": [
+            "editor",
+            "<timestamp>",
+            "<timestamp>"
+        ]
+    },
+    {
+        "sql": "insert into \"permissions\" (\"name\", \"updated_at\", \"created_at\") values (?, ?, ?) returning \"id\"",
+        "bindings": [
+            "posts.edit",
+            "<timestamp>",
+            "<timestamp>"
+        ]
+    },
+    {
+        "sql": "select * from \"roles\" where (\"name\" = ?) limit 1",
+        "bindings": [
+            "editor"
+        ]
+    },
+    {
+        "sql": "insert into \"roles\" (\"name\", \"updated_at\", \"created_at\") values (?, ?, ?) returning \"id\"",
+        "bindings": [
+            "viewer",
+            "<timestamp>",
+            "<timestamp>"
+        ]
+    },
+    {
+        "sql": "select * from \"roles\" where \"name\" = ? limit 1",
+        "bindings": [
+            "editor"
+        ]
+    },
+    {
+        "sql": "select * from \"permissions\" where \"name\" in (?, ?)",
+        "bindings": [
+            "posts.edit",
+            "auth.users.view"
+        ]
+    },
+    {
+        "sql": "select * from \"permission_role\" where \"permission_role\".\"role_id\" = ?",
+        "bindings": [
+            2
+        ]
+    },
+    {
+        "sql": "insert into \"permission_role\" (\"permission_id\", \"role_id\") values (?, ?)",
+        "bindings": [
+            1,
+            2
+        ]
+    },
+    {
+        "sql": "insert into \"permission_role\" (\"permission_id\", \"role_id\") values (?, ?)",
+        "bindings": [
+            3,
+            2
+        ]
+    },
+    {
+        "sql": "select * from \"permissions\" where \"name\" in (?)",
+        "bindings": [
+            "posts.edit"
+        ]
+    },
+    {
+        "sql": "select * from \"permission_role\" where \"permission_role\".\"role_id\" = ?",
+        "bindings": [
+            2
+        ]
+    },
+    {
+        "sql": "delete from \"permission_role\" where \"permission_role\".\"role_id\" = ? and \"permission_role\".\"permission_id\" in (?)",
+        "bindings": [
+            2,
+            1
+        ]
+    },
+    {
+        "sql": "select * from \"permissions\" where \"name\" in (?)",
+        "bindings": [
+            "posts.edit"
+        ]
+    },
+    {
+        "sql": "delete from \"permission_role\" where \"permission_role\".\"role_id\" = ? and \"permission_role\".\"permission_id\" in (?)",
+        "bindings": [
+            2,
+            3
+        ]
+    },
+    {
+        "sql": "select * from \"permissions\" where \"name\" in (?)",
+        "bindings": [
+            "posts.edit"
+        ]
+    },
+    {
+        "sql": "select * from \"permission_role\" where \"permission_role\".\"role_id\" = ?",
+        "bindings": [
+            2
+        ]
+    },
+    {
+        "sql": "insert into \"permission_role\" (\"permission_id\", \"role_id\") values (?, ?)",
+        "bindings": [
+            3,
+            2
+        ]
+    },
+    {
+        "sql": "insert into \"users\" (\"name\", \"updated_at\", \"created_at\") values (?, ?, ?) returning \"id\"",
+        "bindings": [
+            "ada",
+            "<timestamp>",
+            "<timestamp>"
+        ]
+    },
+    {
+        "sql": "insert into \"users\" (\"name\", \"updated_at\", \"created_at\") values (?, ?, ?) returning \"id\"",
+        "bindings": [
+            "bob",
+            "<timestamp>",
+            "<timestamp>"
+        ]
+    },
+    {
+        "sql": "select * from \"roles\" where \"name\" in (?, ?)",
+        "bindings": [
+            "editor",
+            "administrator"
+        ]
+    },
+    {
+        "sql": "select * from \"model_roles\" where \"model_roles\".\"model_id\" = ? and \"model_type\" = ?",
+        "bindings": [
+            1,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User"
+        ]
+    },
+    {
+        "sql": "insert into \"model_roles\" (\"model_id\", \"model_type\", \"role_id\") values (?, ?, ?)",
+        "bindings": [
+            1,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User",
+            1
+        ]
+    },
+    {
+        "sql": "insert into \"model_roles\" (\"model_id\", \"model_type\", \"role_id\") values (?, ?, ?)",
+        "bindings": [
+            1,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User",
+            2
+        ]
+    },
+    {
+        "sql": "select * from \"roles\" where \"name\" in (?)",
+        "bindings": [
+            "viewer"
+        ]
+    },
+    {
+        "sql": "select * from \"model_roles\" where \"model_roles\".\"model_id\" = ? and \"model_type\" = ?",
+        "bindings": [
+            2,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User"
+        ]
+    },
+    {
+        "sql": "insert into \"model_roles\" (\"model_id\", \"model_type\", \"role_id\") values (?, ?, ?)",
+        "bindings": [
+            2,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User",
+            4
+        ]
+    },
+    {
+        "sql": "select * from \"permissions\" where \"name\" in (?)",
+        "bindings": [
+            "auth.users.edit"
+        ]
+    },
+    {
+        "sql": "select * from \"model_permissions\" where \"model_permissions\".\"model_id\" = ? and \"model_type\" = ?",
+        "bindings": [
+            1,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User"
+        ]
+    },
+    {
+        "sql": "insert into \"model_permissions\" (\"model_id\", \"model_type\", \"permission_id\") values (?, ?, ?)",
+        "bindings": [
+            1,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User",
+            2
+        ]
+    },
+    {
+        "sql": "select * from \"roles\" where \"name\" in (?)",
+        "bindings": [
+            "administrator"
+        ]
+    },
+    {
+        "sql": "delete from \"model_roles\" where \"model_roles\".\"model_id\" = ? and \"model_type\" = ? and \"model_roles\".\"role_id\" in (?)",
+        "bindings": [
+            1,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User",
+            1
+        ]
+    },
+    {
+        "sql": "select * from \"roles\" where \"name\" in (?, ?)",
+        "bindings": [
+            "editor",
+            "viewer"
+        ]
+    },
+    {
+        "sql": "select * from \"model_roles\" where \"model_roles\".\"model_id\" = ? and \"model_type\" = ?",
+        "bindings": [
+            1,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User"
+        ]
+    },
+    {
+        "sql": "insert into \"model_roles\" (\"model_id\", \"model_type\", \"role_id\") values (?, ?, ?)",
+        "bindings": [
+            1,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User",
+            4
+        ]
+    },
+    {
+        "sql": "select * from \"permissions\" where \"name\" in (?)",
+        "bindings": [
+            "auth.users.view"
+        ]
+    },
+    {
+        "sql": "select * from \"model_permissions\" where \"model_permissions\".\"model_id\" = ? and \"model_type\" = ?",
+        "bindings": [
+            1,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User"
+        ]
+    },
+    {
+        "sql": "delete from \"model_permissions\" where \"model_permissions\".\"model_id\" = ? and \"model_type\" = ? and \"model_permissions\".\"permission_id\" in (?)",
+        "bindings": [
+            1,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User",
+            2
+        ]
+    },
+    {
+        "sql": "insert into \"model_permissions\" (\"model_id\", \"model_type\", \"permission_id\") values (?, ?, ?)",
+        "bindings": [
+            1,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User",
+            1
+        ]
+    },
+    {
+        "sql": "select * from \"permissions\" where \"name\" in (?)",
+        "bindings": [
+            "auth.users.view"
+        ]
+    },
+    {
+        "sql": "delete from \"model_permissions\" where \"model_permissions\".\"model_id\" = ? and \"model_type\" = ? and \"model_permissions\".\"permission_id\" in (?)",
+        "bindings": [
+            1,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User",
+            1
+        ]
+    },
+    {
+        "sql": "select * from \"users\" where \"users\".\"id\" = ? limit 1",
+        "bindings": [
+            1
+        ]
+    },
+    {
+        "sql": "select \"roles\".*, \"model_roles\".\"model_id\" as \"pivot_model_id\", \"model_roles\".\"role_id\" as \"pivot_role_id\", \"model_roles\".\"model_type\" as \"pivot_model_type\" from \"roles\" inner join \"model_roles\" on \"roles\".\"id\" = \"model_roles\".\"role_id\" where \"model_roles\".\"model_id\" = ? and \"model_roles\".\"model_type\" = ?",
+        "bindings": [
+            1,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User"
+        ]
+    },
+    {
+        "sql": "select \"permissions\".*, \"permission_role\".\"role_id\" as \"pivot_role_id\", \"permission_role\".\"permission_id\" as \"pivot_permission_id\" from \"permissions\" inner join \"permission_role\" on \"permissions\".\"id\" = \"permission_role\".\"permission_id\" where \"permission_role\".\"role_id\" = ?",
+        "bindings": [
+            2
+        ]
+    },
+    {
+        "sql": "select \"permissions\".*, \"permission_role\".\"role_id\" as \"pivot_role_id\", \"permission_role\".\"permission_id\" as \"pivot_permission_id\" from \"permissions\" inner join \"permission_role\" on \"permissions\".\"id\" = \"permission_role\".\"permission_id\" where \"permission_role\".\"role_id\" = ?",
+        "bindings": [
+            4
+        ]
+    },
+    {
+        "sql": "select \"permissions\".*, \"model_permissions\".\"model_id\" as \"pivot_model_id\", \"model_permissions\".\"permission_id\" as \"pivot_permission_id\", \"model_permissions\".\"model_type\" as \"pivot_model_type\" from \"permissions\" inner join \"model_permissions\" on \"permissions\".\"id\" = \"model_permissions\".\"permission_id\" where \"model_permissions\".\"model_id\" = ? and \"model_permissions\".\"model_type\" = ?",
+        "bindings": [
+            1,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User"
+        ]
+    },
+    {
+        "sql": "select * from \"users\" where \"users\".\"id\" = ? limit 1",
+        "bindings": [
+            1
+        ]
+    },
+    {
+        "sql": "select \"id\", \"name\" from \"permissions\"",
+        "bindings": []
+    },
+    {
+        "sql": "select \"roles\".*, \"model_roles\".\"model_id\" as \"pivot_model_id\", \"model_roles\".\"role_id\" as \"pivot_role_id\", \"model_roles\".\"model_type\" as \"pivot_model_type\" from \"roles\" inner join \"model_roles\" on \"roles\".\"id\" = \"model_roles\".\"role_id\" where \"model_roles\".\"model_id\" = ? and \"model_roles\".\"model_type\" = ?",
+        "bindings": [
+            1,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User"
+        ]
+    },
+    {
+        "sql": "select \"permissions\".*, \"permission_role\".\"role_id\" as \"pivot_role_id\", \"permission_role\".\"permission_id\" as \"pivot_permission_id\" from \"permissions\" inner join \"permission_role\" on \"permissions\".\"id\" = \"permission_role\".\"permission_id\" where \"permission_role\".\"role_id\" = ?",
+        "bindings": [
+            2
+        ]
+    },
+    {
+        "sql": "select \"permissions\".*, \"permission_role\".\"role_id\" as \"pivot_role_id\", \"permission_role\".\"permission_id\" as \"pivot_permission_id\" from \"permissions\" inner join \"permission_role\" on \"permissions\".\"id\" = \"permission_role\".\"permission_id\" where \"permission_role\".\"role_id\" = ?",
+        "bindings": [
+            4
+        ]
+    },
+    {
+        "sql": "select \"permissions\".*, \"model_permissions\".\"model_id\" as \"pivot_model_id\", \"model_permissions\".\"permission_id\" as \"pivot_permission_id\", \"model_permissions\".\"model_type\" as \"pivot_model_type\" from \"permissions\" inner join \"model_permissions\" on \"permissions\".\"id\" = \"model_permissions\".\"permission_id\" where \"model_permissions\".\"model_id\" = ? and \"model_permissions\".\"model_type\" = ?",
+        "bindings": [
+            1,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User"
+        ]
+    },
+    {
+        "sql": "select * from \"users\" where \"users\".\"id\" = ? limit 1",
+        "bindings": [
+            2
+        ]
+    },
+    {
+        "sql": "select \"roles\".*, \"model_roles\".\"model_id\" as \"pivot_model_id\", \"model_roles\".\"role_id\" as \"pivot_role_id\", \"model_roles\".\"model_type\" as \"pivot_model_type\" from \"roles\" inner join \"model_roles\" on \"roles\".\"id\" = \"model_roles\".\"role_id\" where \"model_roles\".\"model_id\" = ? and \"model_roles\".\"model_type\" = ?",
+        "bindings": [
+            2,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User"
+        ]
+    },
+    {
+        "sql": "select \"permissions\".*, \"permission_role\".\"role_id\" as \"pivot_role_id\", \"permission_role\".\"permission_id\" as \"pivot_permission_id\" from \"permissions\" inner join \"permission_role\" on \"permissions\".\"id\" = \"permission_role\".\"permission_id\" where \"permission_role\".\"role_id\" = ?",
+        "bindings": [
+            4
+        ]
+    },
+    {
+        "sql": "select \"permissions\".*, \"model_permissions\".\"model_id\" as \"pivot_model_id\", \"model_permissions\".\"permission_id\" as \"pivot_permission_id\", \"model_permissions\".\"model_type\" as \"pivot_model_type\" from \"permissions\" inner join \"model_permissions\" on \"permissions\".\"id\" = \"model_permissions\".\"permission_id\" where \"model_permissions\".\"model_id\" = ? and \"model_permissions\".\"model_type\" = ?",
+        "bindings": [
+            2,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User"
+        ]
+    },
+    {
+        "sql": "select * from \"users\" where exists (select * from \"roles\" inner join \"model_roles\" on \"roles\".\"id\" = \"model_roles\".\"role_id\" where \"users\".\"id\" = \"model_roles\".\"model_id\" and \"model_roles\".\"model_type\" = ? and \"name\" in (?))",
+        "bindings": [
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User",
+            "editor"
+        ]
+    },
+    {
+        "sql": "select count(*) as \"aggregate\" from \"users\" where exists (select * from \"roles\" inner join \"model_roles\" on \"roles\".\"id\" = \"model_roles\".\"role_id\" where \"users\".\"id\" = \"model_roles\".\"model_id\" and \"model_roles\".\"model_type\" = ? and \"name\" in (?, ?))",
+        "bindings": [
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User",
+            "editor",
+            "viewer"
+        ]
+    },
+    {
+        "sql": "select * from \"roles\" order by \"name\" asc",
+        "bindings": []
+    },
+    {
+        "sql": "select * from \"roles\" where \"name\" = ? limit 1",
+        "bindings": [
+            "ghost"
+        ]
+    },
+    {
+        "sql": "select * from \"permissions\" where \"name\" = ? limit 1",
+        "bindings": [
+            "posts.edit"
+        ]
+    },
+    {
+        "sql": "delete from \"model_roles\" where \"model_roles\".\"model_id\" = ? and \"model_type\" = ?",
+        "bindings": [
+            2,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User"
+        ]
+    },
+    {
+        "sql": "delete from \"model_permissions\" where \"model_permissions\".\"model_id\" = ? and \"model_type\" = ?",
+        "bindings": [
+            2,
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User"
+        ]
+    },
+    {
+        "sql": "delete from \"users\" where \"id\" = ?",
+        "bindings": [
+            2
+        ]
+    },
+    {
+        "sql": "select distinct \"model_type\" from \"model_roles\"",
+        "bindings": []
+    },
+    {
+        "sql": "delete from \"model_roles\" where \"model_type\" = ? and \"model_id\" not in (select \"id\" from \"users\")",
+        "bindings": [
+            "RoundlyConsulting\\Permissions\\Tests\\Fixtures\\User"
+        ]
+    },
+    {
+        "sql": "select distinct \"model_type\" from \"model_permissions\"",
+        "bindings": []
+    }
+]
