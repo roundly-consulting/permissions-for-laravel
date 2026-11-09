@@ -29,19 +29,22 @@ it('never auto-loads its migrations', function (): void {
 it('publishes every migration under the unchanged tag, timestamp-injected', function (): void {
     $published = publishesFor('permissions-migrations');
 
-    expect($published)->toHaveCount(5);
+    expect($published)->toHaveCount(8);
 
     $destinations = array_values(array_map('basename', $published));
     sort($destinations);
 
     foreach ($destinations as $destination) {
-        expect($destination)->toMatch('/^\d{4}_\d{2}_\d{2}_\d{6}_(0001_01_01_000\d{3}_)?create_\w+_table\.php$/');
+        expect($destination)->toMatch('/^\d{4}_\d{2}_\d{2}_\d{6}_(0001_01_01_000\d{3}_)?(create|add)_\w+_table\.php$/');
     }
 
     // Published order is dependency order.
     expect($destinations[0])->toContain('create_permissions_table')
         ->and($destinations[1])->toContain('create_roles_table')
-        ->and($destinations[2])->toContain('create_permission_role_table');
+        ->and($destinations[2])->toContain('create_permission_role_table')
+        ->and($destinations[5])->toContain('add_owner_to_roles_table')
+        ->and($destinations[6])->toContain('create_role_assignments_table')
+        ->and($destinations[7])->toContain('create_permission_assignments_table');
 });
 
 it('publishes the config file under the unchanged tag', function (): void {

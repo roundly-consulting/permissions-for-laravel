@@ -221,3 +221,36 @@ it('forgets straight away when no transaction is open', function (): void {
 
     expect(Cache::has(config('permissions.cache.key')))->toBeFalse();
 });
+
+it('defers the invalidation of a scoped assignment write to the commit too', function (): void {
+    config()->set('permissions.assignments.enabled', true);
+
+    Permissions::role('editor');
+    $user = User::query()->create(['name' => 'ada']);
+    $scope = User::query()->create(['name' => 'a scope can be any model']);
+    Permissions::permissions(); // cached
+
+    DB::connection('writer')->transaction(function () use ($user, $scope): void {
+        Permissions::for($user)->in($scope)->until(now()->addDay())->assignRole('editor');
+
+        expect(Cache::has(config('permissions.cache.key')))->toBeTrue();
+    });
+
+    expect(Cache::has(config('permissions.cache.key')))->toBeFalse()
+        ->and(Permissions::for($user)->in($scope)->hasRole('editor'))->toBeTrue();
+});
+
+it('never serves a scoped grant whose transaction rolled back', function (): void {
+    config()->set('permissions.assignments.enabled', true);
+
+    Permissions::role('editor');
+    $user = User::query()->create(['name' => 'ada']);
+    $scope = User::query()->create(['name' => 'scope']);
+
+    DB::connection('writer')->beginTransaction();
+    Permissions::for($user)->in($scope)->assignRole('editor');
+    expect(Permissions::for($user)->in($scope)->hasRole('editor'))->toBeTrue(); // memoized inside
+    DB::connection('writer')->rollBack();
+
+    expect(Permissions::for($user)->in($scope)->hasRole('editor'))->toBeFalse();
+});

@@ -27,6 +27,7 @@
         "illuminate/console": "^13.0",
         "illuminate/contracts": "^13.0",
         "illuminate/database": "^13.0",
+        "illuminate/http": "^13.0",
         "illuminate/support": "^13.0",
         "roundly-consulting/enums-for-laravel": "^2.0",
         "roundly-consulting/package-toolkit-for-laravel": "^2.0",

@@ -90,6 +90,12 @@ final class Grants
         foreach (self::flatten($roles) as $role) {
             if ($role instanceof Role) {
                 self::assertSaved($role, 'Role');
+
+                // An owned role only exists inside its owner's scope (`in($scope)`).
+                if ($role->isOwned()) {
+                    throw PermissionException::roleOutsideOwner($role->name);
+                }
+
                 $models->push($role);
             } else {
                 $names[] = self::nameOrFail($role, 'Role');
@@ -99,7 +105,13 @@ final class Grants
         $names = array_values(array_unique($names));
 
         if ($names !== []) {
-            $found = RoleModel::query()->whereIn('name', $names)->get();
+            $query = RoleModel::query()->whereIn('name', $names);
+
+            if (PermissionRegistrar::assignmentsEnabled()) {
+                $query->where('owner_key', '');
+            }
+
+            $found = $query->get();
 
             if ($found->count() < count($names)) {
                 throw RoleDoesNotExist::named(self::firstMissing($names, $found->pluck('name')->all()));

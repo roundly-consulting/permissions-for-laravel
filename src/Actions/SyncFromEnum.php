@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Permissions\Actions;
 
 use BackedEnum;
+use Illuminate\Database\Eloquent\Model;
 use RoundlyConsulting\Permissions\DataTransferObjects\SyncResult;
 use RoundlyConsulting\Permissions\Exceptions\PermissionException;
 use RoundlyConsulting\Permissions\Models\Permission;
 use RoundlyConsulting\Permissions\Models\Role;
+use RoundlyConsulting\Permissions\Support\AssignmentRows;
+use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
+use RoundlyConsulting\Permissions\Support\ScopeReference;
 
 /**
  * Register one catalog row per case of a backed enum — the bootstrap for the enums the package
@@ -25,8 +29,9 @@ final readonly class SyncFromEnum
     /**
      * @param  string  $enum  a backed enum class; each case's `value` is a name
      * @param  class-string<Role>|class-string<Permission>  $model  the model to create rows as
+     * @param  Model|null  $owner  roles only, assignments on: register the roles this model owns
      */
-    public function execute(string $enum, string $model): SyncResult
+    public function execute(string $enum, string $model, ?Model $owner = null): SyncResult
     {
         if (! enum_exists($enum) || ! is_subclass_of($enum, BackedEnum::class)) {
             throw PermissionException::notABackedEnum($enum);
@@ -37,11 +42,18 @@ final readonly class SyncFromEnum
             $enum::cases(),
         );
 
-        $registered = $model::query()->whereIn('name', $names)->pluck('name')->all();
+        $scoped = $this->ownership($model, $owner);
+        $query = $model::query()->whereIn('name', $names);
+
+        foreach ($scoped as $column => $value) {
+            $query->where($column, $value);
+        }
+
+        $registered = $query->pluck('name')->all();
         $created = [];
 
         foreach (array_diff($names, $registered) as $name) {
-            if ($model::query()->createOrFirst(['name' => $name])->wasRecentlyCreated) {
+            if ($model::query()->createOrFirst([...$scoped, 'name' => $name], $this->ownerColumns($owner))->wasRecentlyCreated) {
                 $created[] = $name;
             }
         }
@@ -50,5 +62,40 @@ final readonly class SyncFromEnum
             created: $created,
             existing: array_values(array_diff($names, $created)),
         );
+    }
+
+    /**
+     * The owner constraint for role rows while assignments are on: `''` for global roles, the
+     * owner's key for owned ones. Permissions (and every row while assignments are off) have
+     * no owner.
+     *
+     * @param  class-string<Role>|class-string<Permission>  $model
+     * @return array<string, string>
+     */
+    private function ownership(string $model, ?Model $owner): array
+    {
+        if ($owner !== null) {
+            AssignmentRows::assertEnabled();
+
+            if (! is_a($model, Role::class, true)) {
+                throw PermissionException::invalidType('Role');
+            }
+
+            return ['owner_key' => ScopeReference::of($owner)->ownerKey()];
+        }
+
+        return is_a($model, Role::class, true) && PermissionRegistrar::assignmentsEnabled() ? ['owner_key' => ''] : [];
+    }
+
+    /** @return array<string, string> */
+    private function ownerColumns(?Model $owner): array
+    {
+        if ($owner === null) {
+            return [];
+        }
+
+        $reference = ScopeReference::of($owner);
+
+        return ['owner_type' => $reference->type, 'owner_id' => $reference->id];
     }
 }

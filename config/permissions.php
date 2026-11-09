@@ -39,6 +39,8 @@ return [
         'permission_role' => 'permission_role',
         'model_roles' => 'model_roles',
         'model_permissions' => 'model_permissions',
+        'role_assignments' => 'role_assignments',
+        'permission_assignments' => 'permission_assignments',
     ],
 
     /*
@@ -69,6 +71,39 @@ return [
     */
 
     'register_gate_check' => true,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Scoped and time-boxed assignments
+    |--------------------------------------------------------------------------
+    |
+    | Roles and direct permissions that hold only inside a scope (a team, a
+    | project, a tenant — any Eloquent model) and/or only between two moments:
+    |
+    |   Permissions::for($user)->in($project)->until($friday)->assignRole('editor');
+    |
+    | They live in two extra tables (`role_assignments`, `permission_assignments`)
+    | and roles gain an owner, so a tenant can define its own `reviewer` role.
+    |
+    |   enabled                 — OFF by default. Publish + run the 2.1 migrations
+    |                             first, then turn it on. While off nothing new is
+    |                             queried, and every scoped/time-boxed call throws.
+    |   scope_key_type          — the key type of your scope (and role-owner)
+    |                             models: bigint, uuid or ulid. Unset reads as
+    |                             `key_type`. Set it before you migrate.
+    |   global_applies_in_scope — whether an unscoped grant also counts inside a
+    |                             scope (an admin is an admin in every project).
+    |                             Strict multi-tenant apps set it to false.
+    |
+    | Booleans accept true/false, 1/0, on/off, yes/no; anything else throws.
+    |
+    */
+
+    'assignments' => [
+        'enabled' => env('PERMISSIONS_ASSIGNMENTS', false),
+        'scope_key_type' => env('PERMISSIONS_SCOPE_KEY_TYPE'),
+        'global_applies_in_scope' => env('PERMISSIONS_GLOBAL_APPLIES_IN_SCOPE', true),
+    ],
 
     /*
     |--------------------------------------------------------------------------

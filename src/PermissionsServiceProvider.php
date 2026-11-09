@@ -16,9 +16,12 @@ use RoundlyConsulting\PackageToolkit\Package;
 use RoundlyConsulting\PackageToolkit\PackageServiceProvider;
 use RoundlyConsulting\PackageToolkit\Support\Config;
 use RoundlyConsulting\Permissions\Commands\CacheResetCommand;
+use RoundlyConsulting\Permissions\Commands\PruneExpiredCommand;
 use RoundlyConsulting\Permissions\Commands\PruneOrphansCommand;
 use RoundlyConsulting\Permissions\Support\DescriptionFallback;
+use RoundlyConsulting\Permissions\Support\GrantResolver;
 use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
+use RoundlyConsulting\Permissions\Support\ScopeResolvers;
 
 final class PermissionsServiceProvider extends PackageServiceProvider
 {
@@ -30,7 +33,7 @@ final class PermissionsServiceProvider extends PackageServiceProvider
             ->name('permissions')
             ->hasConfigFile()
             ->hasMigrations()
-            ->hasCommands([CacheResetCommand::class, PruneOrphansCommand::class])
+            ->hasCommands([CacheResetCommand::class, PruneOrphansCommand::class, PruneExpiredCommand::class])
             ->contributesToAbout(fn (): array => $this->aboutSection());
     }
 
@@ -44,6 +47,8 @@ final class PermissionsServiceProvider extends PackageServiceProvider
 
         $this->app->singleton(PermissionRegistrar::class);
         $this->app->singleton(PermissionsManager::class);
+        $this->app->singleton(GrantResolver::class);
+        $this->app->singleton(ScopeResolvers::class);
     }
 
     public function boot(): void
@@ -76,6 +81,8 @@ final class PermissionsServiceProvider extends PackageServiceProvider
                 'permission_role' => PermissionRegistrar::permissionRoleTable(),
                 'model_roles' => PermissionRegistrar::modelRolesTable(),
                 'model_permissions' => PermissionRegistrar::modelPermissionsTable(),
+                'role_assignments' => PermissionRegistrar::roleAssignmentsTable(),
+                'permission_assignments' => PermissionRegistrar::permissionAssignmentsTable(),
             ],
             static fn (string $table, string $default): bool => $table !== $default,
             ARRAY_FILTER_USE_BOTH,
@@ -88,6 +95,13 @@ final class PermissionsServiceProvider extends PackageServiceProvider
             'Description fallback' => DescriptionFallback::fromConfig()->value,
             'Tables' => $renamed === 0 ? 'DEFAULT' : $renamed.' renamed',
             'Gate check' => Config::boolean('permissions.register_gate_check', true) ? 'ON' : 'OFF',
+            'Assignments' => PermissionRegistrar::assignmentsEnabled()
+                ? sprintf(
+                    'ON, scope key %s, global grants %s in scopes',
+                    PermissionRegistrar::scopeKeyType()->value,
+                    PermissionRegistrar::globalAppliesInScope() ? 'apply' : 'do not apply',
+                )
+                : 'OFF',
             'Catalog cache' => sprintf(
                 'store %s, key %s, ttl %ds',
                 PermissionRegistrar::cacheStoreName() === null ? 'DEFAULT' : 'SET',
@@ -137,6 +151,12 @@ final class PermissionsServiceProvider extends PackageServiceProvider
             if (app()->resolved(PermissionRegistrar::class)) {
                 app(PermissionRegistrar::class)->settle($event->connection, committed: false);
             }
+
+            // A grant row read inside the transaction (a savepoint included) may never have
+            // committed: the memo must not outlive it.
+            if (app()->resolved(GrantResolver::class)) {
+                app(GrantResolver::class)->flush();
+            }
         });
     }
 
@@ -151,12 +171,19 @@ final class PermissionsServiceProvider extends PackageServiceProvider
         }
 
         Gate::before(function (Authorizable $user, string $ability, array $arguments = []): ?bool {
+            $scope = null;
+
             if ($arguments !== []) {
                 // A model/argument was passed (e.g. `$user->can('update', $post)`),
                 // so this is a policy-scoped check. Defer to the gate/policy — a
                 // coarse permission of the same name must never override ownership
-                // or tenancy checks.
-                return null;
+                // or tenancy checks. The one exception is our own scope value object,
+                // which no policy can bind to.
+                if (count($arguments) !== 1 || ! ($arguments[array_key_first($arguments)] instanceof PermissionScope)) {
+                    return null;
+                }
+
+                $scope = $arguments[array_key_first($arguments)];
             }
 
             if (! method_exists($user, 'hasPermissionTo')) {
@@ -167,7 +194,19 @@ final class PermissionsServiceProvider extends PackageServiceProvider
                 return null; // not one of our permissions — pass through (never false)
             }
 
-            return $user->hasPermissionTo($ability) ? true : null;
+            $scopes = $scope !== null ? $scope->models : (app()->resolved(ScopeResolvers::class)
+                ? app(ScopeResolvers::class)->ambientScopes($user, $ability)
+                : null);
+
+            if ($scopes === null) {
+                return $user->hasPermissionTo($ability) ? true : null;
+            }
+
+            if (! $user instanceof Model) {
+                return null;
+            }
+
+            return app(PermissionsManager::class)->for($user)->in($scopes)->hasPermissionTo($ability) ? true : null;
         });
     }
 
@@ -181,6 +220,10 @@ final class PermissionsServiceProvider extends PackageServiceProvider
     {
         $flush = static function (): void {
             app(PermissionRegistrar::class)->flushMemo();
+
+            if (app()->resolved(GrantResolver::class)) {
+                app(GrantResolver::class)->flush();
+            }
         };
 
         // Octane request/task/tick boundaries — matched by event class name so we

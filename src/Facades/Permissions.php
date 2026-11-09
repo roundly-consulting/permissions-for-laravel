@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Permissions\Facades;
 
 use BackedEnum;
+use Closure;
+use DateTimeInterface;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Facade;
@@ -12,7 +14,9 @@ use RoundlyConsulting\Permissions\DataTransferObjects\SyncResult;
 use RoundlyConsulting\Permissions\HolderGrants;
 use RoundlyConsulting\Permissions\Models\Permission;
 use RoundlyConsulting\Permissions\Models\Role;
+use RoundlyConsulting\Permissions\OwnedRoles;
 use RoundlyConsulting\Permissions\PermissionCache;
+use RoundlyConsulting\Permissions\PermissionScope;
 use RoundlyConsulting\Permissions\PermissionsManager;
 use RoundlyConsulting\Permissions\Testing\PermissionsFake;
 
@@ -21,6 +25,12 @@ use RoundlyConsulting\Permissions\Testing\PermissionsFake;
  * @method static Role role(string|BackedEnum $name)
  * @method static Role|null findRole(string|BackedEnum $name)
  * @method static Collection<int, Role> roles()
+ * @method static OwnedRoles owner(Model $owner)
+ * @method static PermissionScope scope(Model|iterable<Model> $scopes)
+ * @method static void resolveScopeUsing(Closure|null $resolver)
+ * @method static void resolveRoleOwnerUsing(Closure|null $resolver)
+ * @method static int forgetScope(Model $scope)
+ * @method static int pruneExpired(DateTimeInterface|null $endedBefore = null)
  * @method static Permission permission(string|BackedEnum $name)
  * @method static Permission|null findPermission(string|BackedEnum $name)
  * @method static Collection<int, Permission> permissions()

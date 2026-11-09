@@ -357,6 +357,46 @@ final class PermissionRegistrar
         return self::string('permissions.table_names.model_permissions', config('permissions.table_names.model_permissions'), 'model_permissions');
     }
 
+    /** The `table_names.role_assignments` table: scoped and/or time-boxed role grants. */
+    public static function roleAssignmentsTable(): string
+    {
+        return self::string('permissions.table_names.role_assignments', config('permissions.table_names.role_assignments'), 'role_assignments');
+    }
+
+    /** The `table_names.permission_assignments` table: scoped and/or time-boxed direct permissions. */
+    public static function permissionAssignmentsTable(): string
+    {
+        return self::string('permissions.table_names.permission_assignments', config('permissions.table_names.permission_assignments'), 'permission_assignments');
+    }
+
+    /**
+     * Whether scoped / time-boxed assignments and owned roles are on
+     * (`permissions.assignments.enabled`, default off). While off, nothing reads the 2.1 tables
+     * or columns, so a host that has not published the 2.1 migrations keeps working.
+     */
+    public static function assignmentsEnabled(): bool
+    {
+        return Config::boolean('permissions.assignments.enabled', false);
+    }
+
+    /**
+     * Whether an unscoped grant also counts inside a scope
+     * (`permissions.assignments.global_applies_in_scope`, default on).
+     */
+    public static function globalAppliesInScope(): bool
+    {
+        return Config::boolean('permissions.assignments.global_applies_in_scope', true);
+    }
+
+    /**
+     * The key type of scope and role-owner models (drives `scope_id` and `roles.owner_id`).
+     * Not set reads as {@see KeyType()}; an unrecognized value throws.
+     */
+    public static function scopeKeyType(): KeyType
+    {
+        return KeyType::fromConfig('permissions.assignments.scope_key_type', self::keyType());
+    }
+
     /**
      * The key type of the models that hold roles/permissions (drives `model_id`).
      *

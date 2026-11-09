@@ -13,8 +13,11 @@ use Illuminate\Support\Collection;
 use RoundlyConsulting\Permissions\Models\Permission;
 use RoundlyConsulting\Permissions\Models\Role;
 use RoundlyConsulting\Permissions\PermissionsManager;
+use RoundlyConsulting\Permissions\Support\EffectiveGrants;
 use RoundlyConsulting\Permissions\Support\Grants;
 use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
+use RoundlyConsulting\Permissions\Support\RoleInScope;
+use RoundlyConsulting\Permissions\Support\Scopes;
 
 /**
  * Gives any Authenticatable model roles and direct permissions, and resolves
@@ -108,26 +111,68 @@ trait HasRoles
     }
 
     /**
+     * Whether the model has any of these roles (unscoped). With assignments on, an unscoped
+     * time-boxed role counts while its window is open; a scoped one never does here — use
+     * `hasRoleIn()`.
+     *
      * @param  string|BackedEnum|iterable<mixed>  $role
      */
     public function hasRole(string|BackedEnum|iterable $role): bool
     {
         $names = Grants::names($role, Role::class, 'Role');
 
-        return $this->relatedRoles()->contains(
+        if ($this->relatedRoles()->contains(
             static fn (Role $candidate): bool => in_array($candidate->name, $names, true),
-        );
+        )) {
+            return true;
+        }
+
+        return PermissionRegistrar::assignmentsEnabled()
+            && array_intersect($names, $this->assignedOnly()->roleNames()) !== [];
     }
 
+    /**
+     * Whether the model has this permission, directly or through a role (unscoped). With
+     * assignments on, unscoped time-boxed grants count while their window is open; scoped ones
+     * never do here — use `hasPermissionIn()`.
+     */
     public function hasPermissionTo(string|BackedEnum|Permission $permission): bool
     {
         $name = $permission instanceof Permission
             ? $permission->name
             : PermissionRegistrar::nameOf($permission);
 
-        return $this->getAllPermissions()->contains(
+        if ($this->getAllPermissions()->contains(
             static fn (Permission $candidate): bool => $candidate->name === $name,
-        );
+        )) {
+            return true;
+        }
+
+        return PermissionRegistrar::assignmentsEnabled()
+            && in_array($name, $this->assignedOnly()->permissionNames(), true);
+    }
+
+    /**
+     * Whether the model has any of these roles inside the scope (or any of the scopes) — sugar
+     * for `Permissions::for($this)->in($scope)->hasRole($role)`. Requires assignments on.
+     *
+     * @param  Model|iterable<Model>  $scope
+     * @param  string|BackedEnum|iterable<mixed>  $role
+     */
+    public function hasRoleIn(Model|iterable $scope, string|BackedEnum|iterable $role): bool
+    {
+        return app(PermissionsManager::class)->for($this)->in($scope)->hasRole($role);
+    }
+
+    /**
+     * Whether the model has this permission inside the scope (or any of the scopes) — sugar for
+     * `Permissions::for($this)->in($scope)->hasPermissionTo($permission)`. Requires assignments on.
+     *
+     * @param  Model|iterable<Model>  $scope
+     */
+    public function hasPermissionIn(Model|iterable $scope, string|BackedEnum|Permission $permission): bool
+    {
+        return app(PermissionsManager::class)->for($this)->in($scope)->hasPermissionTo($permission);
     }
 
     /**
@@ -176,9 +221,38 @@ trait HasRoles
     {
         $names = Grants::names($role, Role::class, 'Role');
 
-        return $query->whereHas('roles', static function (Builder $roles) use ($names): void {
+        $global = PermissionRegistrar::assignmentsEnabled();
+
+        return $query->whereHas('roles', static function (Builder $roles) use ($names, $global): void {
             $roles->whereIn('name', $names);
+
+            if ($global) {
+                $roles->where('owner_key', '');
+            }
         });
+    }
+
+    /**
+     * Models that have any of these roles inside the scope (or any of the scopes), now:
+     * `User::roleIn($project, 'editor')`. Counts the 2.0 roles and the unscoped rows too while
+     * `global_applies_in_scope` is on. Requires assignments on.
+     *
+     * @param  Builder<Model>  $query
+     * @param  Model|iterable<Model>  $scope
+     * @param  string|BackedEnum|iterable<mixed>  $role
+     * @return Builder<Model>
+     */
+    public function scopeRoleIn(Builder $query, Model|iterable $scope, string|BackedEnum|iterable $role): Builder
+    {
+        return (new RoleInScope($scope, Grants::names($role, Role::class, 'Role')))->apply($query, $this);
+    }
+
+    /**
+     * The unscoped assignment rows only (the 2.0 grants are checked by the caller).
+     */
+    private function assignedOnly(): EffectiveGrants
+    {
+        return new EffectiveGrants($this, null, Scopes::now(), includeTwoPointZero: false);
     }
 
     /**

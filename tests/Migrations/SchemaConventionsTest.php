@@ -125,3 +125,36 @@ it('carries a nullable jsonb description on roles and permissions', function ():
         ->and(createStatement('permissions'))->toContain('"description" text')
         ->and(createStatement('permissions'))->not->toContain('"description" text not null');
 });
+
+it('keeps every index name within MySQL\'s 64 characters', function (string $keyType): void {
+    migrateForKeyType($keyType);
+
+    /** @var list<object{name: string}> $indexes */
+    $indexes = DB::connection('schema_pin')->select("select name from sqlite_master where type = 'index' and name not like 'sqlite_%'");
+
+    expect($indexes)->not->toBeEmpty();
+
+    foreach ($indexes as $index) {
+        expect(strlen($index->name))->toBeLessThanOrEqual(64, "index {$index->name} is too long for MySQL");
+    }
+})->with(['bigint', 'uuid', 'ulid']);
+
+it('types the 2.1 scope and owner keys from scope_key_type, defaulting to key_type', function (string $keyType, ?string $scopeKeyType, string $holderColumn, string $scopeColumn): void {
+    config()->set('permissions.assignments.scope_key_type', $scopeKeyType);
+    migrateForKeyType($keyType);
+
+    foreach (['role_assignments', 'permission_assignments'] as $table) {
+        expect(createStatement($table))->toContain('"model_id" '.$holderColumn.' not null')
+            ->and(createStatement($table))->toContain('"scope_id" '.$scopeColumn.',')
+            ->and(createStatement($table))->toContain('"valid_until" datetime')
+            ->and(createStatement($table))->toContain('"fingerprint" varchar not null');
+    }
+
+    expect(createStatement('roles'))->toContain('"owner_id" '.$scopeColumn)
+        ->and(createStatement('roles'))->toContain('"owner_key" varchar not null default \'\'');
+})->with([
+    'bigint, default' => ['bigint', null, 'integer', 'integer'],
+    'uuid, default' => ['uuid', null, 'varchar', 'varchar'],
+    'uuid holders, bigint scopes' => ['uuid', 'bigint', 'varchar', 'integer'],
+    'bigint holders, ulid scopes' => ['bigint', 'ulid', 'integer', 'varchar'],
+]);

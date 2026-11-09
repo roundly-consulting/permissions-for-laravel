@@ -9,6 +9,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use RoundlyConsulting\Permissions\Concerns\HasPermissions;
 use RoundlyConsulting\Permissions\Concerns\TranslatesDescription;
 use RoundlyConsulting\Permissions\Database\Factories\RoleFactory;
@@ -19,6 +20,9 @@ use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
  * @property int $id
  * @property string $name
  * @property string|null $description Resolved for the current locale; assign a per-locale array to write.
+ * @property string|null $owner_type 2.1, with assignments on: the owner's morph class (hidden)
+ * @property int|string|null $owner_id 2.1, with assignments on: the owner's key
+ * @property string|null $owner_key 2.1, with assignments on: `''` for a global role (hidden)
  * @property CarbonInterface $created_at
  * @property CarbonInterface $updated_at
  *
@@ -37,6 +41,14 @@ class Role extends Model
     use TranslatesDescription;
 
     protected $guarded = [];
+
+    /**
+     * The 2.1 owner columns carry a class name (`owner_type`, and `owner_key` embeds it), so a
+     * serialized role never shows them. Absent until the 2.1 migrations run.
+     *
+     * @var list<string>
+     */
+    protected $hidden = ['owner_type', 'owner_key'];
 
     public function getTable(): string
     {
@@ -68,6 +80,25 @@ class Role extends Model
             'role_id',
             'permission_id',
         );
+    }
+
+    /**
+     * The model that owns this role (`Permissions::owner($tenant)->role(…)`), or null for a
+     * global role. Only meaningful once the 2.1 migrations ran.
+     *
+     * @return MorphTo<Model, $this>
+     */
+    public function owner(): MorphTo
+    {
+        return $this->morphTo('owner', 'owner_type', 'owner_id');
+    }
+
+    /** Whether this is a tenant-defined role (owned) rather than a global one. */
+    public function isOwned(): bool
+    {
+        $key = $this->getAttribute('owner_key');
+
+        return is_string($key) && $key !== '';
     }
 
     protected static function newFactory(): RoleFactory

@@ -6,6 +6,7 @@ namespace RoundlyConsulting\Permissions\Actions;
 
 use Illuminate\Database\Eloquent\Model;
 use RoundlyConsulting\Permissions\Enums\GrantMode;
+use RoundlyConsulting\Permissions\Support\AssignmentRows;
 use RoundlyConsulting\Permissions\Support\Grants;
 use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
 
@@ -15,7 +16,8 @@ use RoundlyConsulting\Permissions\Support\PermissionRegistrar;
  * whole registry is sold on) or authoritatively (`syncPermissions`: the given set becomes the
  * complete set).
  *
- * Unknown permission names throw `PermissionDoesNotExist` before anything is written.
+ * Unknown permission names throw `PermissionDoesNotExist` before anything is written. With
+ * `permissions.assignments.enabled` on, a sync also clears the holder's unscoped assignment rows.
  */
 final readonly class GrantPermissions
 {
@@ -32,15 +34,24 @@ final readonly class GrantPermissions
         // Wrap detach+attach so a concurrent gate check never observes the empty mid-sync
         // grant set, and interleaved authoritative syncs can't persist a union/loss neither
         // caller asked for.
-        $holder->getConnection()->transaction(static function () use ($relation, $ids, $mode): void {
+        $clearsAssignments = $mode->detaches()
+            && PermissionRegistrar::assignmentsEnabled()
+            && AssignmentRows::holdsAssignments($holder);
+
+        $holder->getConnection()->transaction(static function () use ($holder, $relation, $ids, $mode, $clearsAssignments): void {
             if ($mode->detaches()) {
                 $relation->sync($ids);
             } else {
                 $relation->syncWithoutDetaching($ids);
             }
+
+            if ($clearsAssignments) {
+                AssignmentRows::inScope(AssignmentRows::permissions($holder), null)->delete();
+            }
         });
 
         $holder->unsetRelation('permissions');
+        AssignmentRows::forgetMemo($holder);
         $this->registrar->forgetAfterCommit($holder->getConnection());
     }
 }

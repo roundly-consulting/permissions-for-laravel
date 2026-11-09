@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use RoundlyConsulting\Permissions\Tests\Assignments\AssignmentsTestCase;
 use RoundlyConsulting\Permissions\Tests\Configured\ConfiguredTestCase;
 use RoundlyConsulting\Permissions\Tests\GateDisabledTestCase;
 use RoundlyConsulting\Permissions\Tests\TestCase;
@@ -14,6 +15,7 @@ use RoundlyConsulting\Permissions\Tests\TestCase;
 uses(TestCase::class)->in('Unit', 'Feature', 'Concurrency', 'Migrations', 'Provider', 'ArchTest.php');
 uses(ConfiguredTestCase::class)->in('Configured');
 uses(GateDisabledTestCase::class)->in('Toggle');
+uses(AssignmentsTestCase::class)->in('Assignments');
 
 // The bespoke `pgsqlConfigured()` helper is gone, with its PERMISSIONS_PGSQL_* convention.
 // It asked whether an env var was SET rather than whether an engine was REACHABLE, so the

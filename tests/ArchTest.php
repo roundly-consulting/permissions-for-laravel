@@ -108,6 +108,8 @@ arch('src only uses allowed vendor roots')
         'RoundlyConsulting\Translatable',
         'Illuminate',
         'Carbon',
+        // The middleware's return type: Laravel's HTTP layer is built on it (illuminate/http).
+        'Symfony\Component\HttpFoundation',
         'BackedEnum',
         'RuntimeException',
         // native helpers used unqualified

@@ -7,7 +7,7 @@ use RoundlyConsulting\Permissions\PermissionsServiceProvider;
 use RoundlyConsulting\Testing\Database\DriverMatrix;
 
 /**
- * M + P + R for the five permission tables.
+ * M + P + R for the seven permission tables (+ the 2.1 `roles` owner columns).
  *
  * Every table expression in this package's migrations is the `Class::method()` form —
  * `Schema::create(PermissionRegistrar::rolesTable())`,
@@ -24,6 +24,8 @@ $tableResolvers = [
     'PermissionRegistrar::permissionRoleTable()' => 'permission_role',
     'PermissionRegistrar::modelRolesTable()' => 'model_roles',
     'PermissionRegistrar::modelPermissionsTable()' => 'model_permissions',
+    'PermissionRegistrar::roleAssignmentsTable()' => 'role_assignments',
+    'PermissionRegistrar::permissionAssignmentsTable()' => 'permission_assignments',
 ];
 
 /**
@@ -34,14 +36,15 @@ $tableResolvers = [
  * exactly that under green SQLite suites, because SQLite happily creates a table whose
  * foreign key names a missing parent and only complains at insert time.
  *
- * `foreignKeys: 4` pins the edge count: permission_role has 2 (permissions + roles),
- * model_roles has 1, model_permissions has 1. The junction tables' `model_id` is
+ * `foreignKeys: 6` pins the edge count: permission_role has 2 (permissions + roles),
+ * model_roles has 1, model_permissions has 1, and the 2.1 role_assignments /
+ * permission_assignments 1 each. The junction tables' `model_id` is
  * deliberately NOT constrained — a holder can live in any table, and its key type is
  * configurable (`permissions.key_type`).
  */
 it('has a runnable migration order', function () use ($migrations, $tableResolvers): void {
     expect($migrations)->toHaveRunnableMigrationOrder(
-        foreignKeys: 4,
+        foreignKeys: 6,
         tableResolvers: $tableResolvers,
     );
 });
@@ -49,7 +52,7 @@ it('has a runnable migration order', function () use ($migrations, $tableResolve
 /**
  * P — the publish-only guards. The fleet publishes migrations timestamped rather than
  * auto-loading them; doing both runs both copies — a duplicate-table failure (bug #5, on
- * three packages). `count: 5` pins the file count so neither check can pass over an empty
+ * three packages). `count: 8` pins the file count so neither check can pass over an empty
  * or relocated directory.
  */
 it('never auto-loads its migrations — the host publishes them', function (): void {
@@ -57,18 +60,18 @@ it('never auto-loads its migrations — the host publishes them', function (): v
 });
 
 it('publishes its migrations timestamp-injected into the host', function (): void {
-    expect(PermissionsServiceProvider::class)->toPublishMigrationsTimestamped('permissions-migrations', 5);
+    expect(PermissionsServiceProvider::class)->toPublishMigrationsTimestamped('permissions-migrations', 8);
 });
 
 /**
  * R — the real-engine proof, both halves.
  *
- * The structural pin above is engine-independent; this is the definitive one. `migrations: 5`
+ * The structural pin above is engine-independent; this is the definitive one. `migrations: 8`
  * pins the count, and the expectation additionally fails a set that "applies cleanly" while
  * creating no tables — an empty `up()` otherwise passes and proves nothing.
  */
 it('applies its migrations on postgres', function () use ($migrations): void {
-    expect($migrations)->toApplyOnConnection('pgsql', migrations: 5);
+    expect($migrations)->toApplyOnConnection('pgsql', migrations: 8);
 })->skip(fn (): bool => ! test()->connectionAvailable('pgsql'), 'no postgres connection available');
 
 /**
