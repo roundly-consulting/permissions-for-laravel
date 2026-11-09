@@ -6,6 +6,74 @@ All notable changes to `permissions-for-laravel` are documented in this file. Th
 
 ## Unreleased
 
+### Added
+
+- **Scoped and time-boxed roles and permissions**, opt-in behind the new
+  `permissions.assignments.enabled` flag (default off):
+  `Permissions::for($user)->in($project)->until($friday)->assignRole('editor')`. A scope is any
+  Eloquent model; a window has an inclusive start and an exclusive end, in UTC. A scoped grant
+  never counts outside its scope; unscoped grants count inside every scope unless
+  `permissions.assignments.global_applies_in_scope` is false. Checks take several scopes (any of
+  them), writes exactly one. The handle gains `in()`, `from()`, `until()`, `between()`, `at()`,
+  and the reads `hasRole()`, `hasAnyRole()`, `hasPermissionTo()`, `roleNames()`,
+  `permissionNames()` and `assignments()` (a list of the new `Assignment` DTO).
+- **Owned roles**: `Permissions::owner($tenant)->role('reviewer')` (+ `findRole()`, `roles()`,
+  `syncRolesFrom()`), so each tenant can define its own roles. An owned role is assignable only
+  inside its owner's scope; `Permissions::resolveRoleOwnerUsing()` widens that (e.g. a project
+  uses its tenant's roles).
+- Scoped Gate checks with `Permissions::scope($project)`:
+  `$user->can('posts.edit', Permissions::scope($project))`, `@can`, `Gate::authorize()`. The
+  hook still answers only `true` or `null`. `Permissions::resolveScopeUsing()` gives scope-less
+  Gate checks an ambient scope.
+- `Http\Middleware\EnsurePermission` route middleware:
+  `EnsurePermission::using('posts.edit', scope: 'project')`.
+- `HasRoles` sugar: `hasRoleIn()`, `hasPermissionIn()` and the `roleIn()` query scope.
+- `Permissions::forgetScope()`, `Permissions::pruneExpired()` and the
+  `permissions:prune-expired --after="30 days"` command; `pruneOrphans()` also prunes
+  assignments of deleted holders and scopes and roles of deleted owners while the flag is on.
+- The fake records scope and window; its holder assertions take optional `scope:` / `from:` /
+  `until:` filters, `assertRoleRegistered()` an `owner:` filter, and it gains
+  `assertScopeForgotten()`, `assertNoScopeForgotten()`, `assertExpiredPruned()` and
+  `assertNoExpiredPruned()`.
+- Config: `assignments.enabled`, `assignments.scope_key_type`,
+  `assignments.global_applies_in_scope`, `table_names.role_assignments`,
+  `table_names.permission_assignments`. `php artisan about` reports the assignments state.
+- Three publishable migrations: `add_owner_to_roles_table` (role owner columns; the `roles`
+  name unique index becomes `(owner_key, name)`), `create_role_assignments_table`,
+  `create_permission_assignments_table`.
+
+### Changed
+
+- With `permissions.assignments.enabled` on (never while off): `role()`, `findRole()`,
+  `roles()`, `syncRolesFrom()`, `Role::findOrCreate()`, role-name resolution and the `role()`
+  query scope work on global roles only; unscoped `hasRole()` / `hasPermissionTo()` and the Gate
+  also count unscoped time-boxed grants while their window is open; unscoped `syncRoles()`,
+  `syncPermissions()`, `removeRole()` and `revokePermissionTo()` also clear the holder's
+  unscoped assignment rows; `forgetAllAuthorization()` also clears every assignment of the
+  holder in every scope. The `roles` / `permissions` relations, `getRoleNames()` and
+  `getAllPermissions()` keep listing 2.0 grants only — use
+  `Permissions::for($user)->assignments()` for everything.
+- `Role` hides the new `owner_type` and `owner_key` attributes when serialized.
+- Maintenance: requires `illuminate/http` (for the middleware; every Laravel app has it).
+
+### Upgrade
+
+Nothing changes until you opt in — with the flag off the package sends exactly the 2.0
+queries. To use the new features:
+
+1. If your scope models use another key type than your holders, set
+   `permissions.assignments.scope_key_type` first.
+2. `php artisan vendor:publish --tag=permissions-migrations` and `php artisan migrate`. If you
+   renamed the `roles_name_unique` index by hand, adjust `add_owner_to_roles_table`.
+3. Set `PERMISSIONS_ASSIGNMENTS=true`.
+4. Optional: call `Permissions::forgetScope($model)` from your scope models' `deleting` hooks and
+   schedule `permissions:prune-expired`.
+
+### Planned for the next major
+
+- Fold the 2.0 `model_roles` / `model_permissions` tables into the assignment tables and drop
+  the `permissions.assignments.enabled` flag (scoped and time-boxed grants always on).
+
 ## 2.0.0 - 2026-11-07
 
 ### Changed
